@@ -33,8 +33,7 @@ These packages are literate and tangled from this README.org.
   desc "Opinionated dialect of Scheme designed for Systems Programming"
   homepage "https://cons.io"
   url "https://github.com/mighty-gerbils/gerbil.git",
-      using: :git, revision: "92b1a2f642d6ebbcd3bd223ccc0af7ec0d9a42ad"
-  version "0.18.1"
+      using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 #+end_src
 #+begin_src ruby :noweb-ref deps-pkg
@@ -47,13 +46,10 @@ These packages are literate and tangled from this README.org.
   depends_on "zlib"
 #+end_src
 #+begin_src ruby :noweb-ref install-pkg
-   def install
+  def install
     nproc = `nproc`.to_i - 1
+    ENV["GERBIL_BUILD_CORES"] = nproc.to_s
 
-    if OS.mac?
-      ENV.prepend_path("PATH", "/usr/local/opt/llvm/bin")
-      ENV.prepend_path("PATH", "/opt/homebrew/opt/llvm/bin")
-    end
 
     if OS.linux?
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/bin")
@@ -62,9 +58,18 @@ These packages are literate and tangled from this README.org.
 
     ENV["GERBIL_GCC"] = ENV.cc.to_s
     ENV["CC"] = ENV.cc.to_s
+    ENV["CXX"] = ENV.cxx.to_s
+    ENV["LDFLAGS"] = "-Wl,-ld_classic" if OS.mac?
 
     system ENV.cc.to_s, "--version"
-    system "./configure", "--prefix=#{prefix}", "--enable-march="
+    system "./configure",
+      "--prefix=#{prefix}",
+      "--enable-march=",
+      "--enable-smp",
+      "--disable-single-host"
+    inreplace "src/build.sh",
+      'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
+      'm="${MAKE:-make}" && $m bootstrap && $m from-scratch'
     system "make", "-j#{nproc}"
     system "make", "install"
 
@@ -87,20 +92,20 @@ These packages are literate and tangled from this README.org.
 #+end_src
 
 ** Gcc
-#+begin_src ruby :tangle Formula/gerbil-scheme.rb :noweb yes
+#+begin_src ruby :tangle Formula/gerbil-scheme.rb :noweb yes :padline no
   class GerbilScheme < Formula
     <<start-pkg>>
-    # revision 3
     <<deps-pkg>>
     on_macos do
-       depends_on "llvm"
+      fails_with :gcc do
+        cause "Gambit FFI bundles built with Homebrew GCC cannot resolve macOS libSystem symbols"
+      end
     end
     on_linux do
-       depends_on "gcc@13"
-    end
-    fails_with :gcc do
-       version "12" # Select new gcc
-       cause "Make it easy with all the same"
+      depends_on "gcc@13"
+      fails_with :clang do
+        cause "Gerbil requires GCC on Linux"
+      end
     end
     <<install-pkg>>
   end
@@ -124,7 +129,7 @@ These packages are literate and tangled from this README.org.
   end
 
 
-    
+
 #+end_src
 
 * HACKING
@@ -138,4 +143,3 @@ brew style --fix  mighty-gerbils/gerbil/gerbil-scheme
 
 brew audit mighty-gerbils/gerbil/gerbil-scheme --online --new
 #+end_src
-
