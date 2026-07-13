@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# Gerbil Scheme language implementation and toolchain.
 class GerbilScheme < Formula
   # This .rb file is tangled (AKA generated) from README.org
   desc "Opinionated dialect of Scheme designed for Systems Programming"
@@ -26,6 +29,7 @@ class GerbilScheme < Formula
   def install
     nproc = `nproc`.to_i - 1
     ENV["GERBIL_BUILD_CORES"] = nproc.to_s
+
     if OS.linux?
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/bin")
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/sbin")
@@ -34,19 +38,36 @@ class GerbilScheme < Formula
     ENV["GERBIL_GCC"] = ENV.cc.to_s
     ENV["CC"] = ENV.cc.to_s
     ENV["CXX"] = ENV.cxx.to_s
-    ENV["LDFLAGS"] = "-Wl,-ld_classic" if OS.mac?
+    openssl_include = formula_opt_include("openssl@3")
+    ENV.append "CPPFLAGS", "-I#{openssl_include} -include #{openssl_include}/openssl/kdf.h"
+    ENV.append "LDFLAGS", "-L#{formula_opt_lib("openssl@3")}"
+    if OS.mac?
+      ENV.append "CPPFLAGS", "-isysroot #{MacOS.sdk_path}"
+      ENV.append "LDFLAGS", "-Wl,-ld_classic"
+    end
 
     system ENV.cc.to_s, "--version"
     system "./configure",
-      "--prefix=#{prefix}",
-      "--enable-march=",
-      "--enable-smp",
-      "--disable-single-host"
+           "--prefix=#{prefix}",
+           "--enable-march=",
+           "--enable-smp",
+           "--disable-single-host"
     inreplace "src/build.sh",
-      'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
-      'm="${MAKE:-make}" && $m bootstrap && $m from-scratch'
+              'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
+              'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \
+              '$m -j "${GERBIL_BUILD_CORES:-1}" from-scratch'
     system "make", "-j#{nproc}"
     system "make", "install"
+
+    if OS.mac?
+      gambuild_c = prefix/"current/bin/gambuild-C"
+      inreplace gambuild_c,
+                ENV.cc.to_s,
+                "/usr/bin/xcrun --sdk macosx clang"
+      inreplace gambuild_c,
+                " -bundle ",
+                " -bundle -Wl,-undefined,dynamic_lookup "
+    end
 
     # We get rid of all the non-LFSH stuff
 
