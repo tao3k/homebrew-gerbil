@@ -61,6 +61,9 @@ jobs:
         id: bottle-verification
         working-directory: bottles
         env:
+          # Homebrew 6 forbids package paths by default outside developer/test
+          # mode. The artifact is trusted by source run id and SHA-256 below.
+          HOMEBREW_DEVELOPER: "1"
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         shell: bash
@@ -92,7 +95,9 @@ jobs:
             set +e
             gerbil_version="$(gxi -v 2>&1)"
             version_status=$?
-            brew test tao3k/gerbil/gerbil-scheme
+            # Resolve the test from the bottle's embedded formula. The tap's
+            # default branch may not contain this PR revision until publish.
+            brew test "$bottle_path"
             test_status=$?
             set -e
             verification_seconds=$((SECONDS - verify_start_seconds))
