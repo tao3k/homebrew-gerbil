@@ -13,6 +13,11 @@ class GerbilScheme < Formula
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
+  bottle do
+    root_url "https://github.com/tao3k/homebrew-gerbil/releases/download/gerbil-scheme-0.18.2_1"
+    sha256 arm64_tahoe: "912a79b4096b870f53e3f6fb56b1a79515d6f3996b8e0fb5d20af4d47b0c994a"
+  end
+
   depends_on "coreutils" => :build
   depends_on "pkg-config" => :build
   depends_on "openssl@3"
