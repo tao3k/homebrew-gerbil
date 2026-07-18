@@ -27,8 +27,8 @@ class GerbilScheme < Formula
     end
   end
   def install
-    nproc = `nproc`.to_i - 1
-    ENV["GERBIL_BUILD_CORES"] = nproc.to_s
+    build_cores = ENV.make_jobs
+    ENV["GERBIL_BUILD_CORES"] = build_cores.to_s
 
     if OS.linux?
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/bin")
@@ -56,7 +56,7 @@ class GerbilScheme < Formula
               'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
               'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \
               '$m -j "${GERBIL_BUILD_CORES:-1}" from-scratch'
-    system "make", "-j#{nproc}"
+    system "make", "-j#{build_cores}"
     system "make", "install"
 
     if OS.mac?
