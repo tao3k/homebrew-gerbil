@@ -1,0 +1,158 @@
+name: verify bottle capability
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful brew test-bot run containing the bottle artifact
+        required: true
+        type: string
+      artifact_name:
+        description: Bottle artifact produced by the source run
+        default: bottles_macos-26
+        required: true
+        type: string
+      install_budget_seconds:
+        description: Maximum fresh-runner bottle installation time
+        default: "120"
+        required: true
+        type: string
+  workflow_run:
+    workflows:
+      - brew test-bot
+    types:
+      - completed
+
+concurrency:
+  group: bottle-capability-${{ inputs.source_run_id || github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  bottle-performance:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request')
+    runs-on: macos-26
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    env:
+      SOURCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
+      BOTTLE_ARTIFACT_NAME: ${{ inputs.artifact_name || 'bottles_macos-26' }}
+      BOTTLE_INSTALL_BUDGET_SECONDS: ${{ inputs.install_budget_seconds || '120' }}
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@18fcb8e3e06b4247c676c506750dc95ea7226479 # 2026.07.13.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download provider bottle artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.BOTTLE_ARTIFACT_NAME }}
+          path: bottles
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify fresh-runner bottle capability
+        id: bottle-verification
+        working-directory: bottles
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        shell: bash
+        run: |
+          shopt -s nullglob
+          bottles=(*.bottle.tar.gz)
+          if (( ${#bottles[@]} != 1 )); then
+            echo "expected exactly one arm64 macOS bottle, got ${#bottles[@]}" >&2
+            exit 1
+          fi
+
+          bottle_path="./${bottles[0]}"
+          bottle_sha256="$(shasum -a 256 "$bottle_path" | awk '{print $1}')"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          start_seconds=$SECONDS
+
+          set +e
+          brew install "$bottle_path"
+          install_status=$?
+          set -e
+
+          install_seconds=$((SECONDS - start_seconds))
+          verification_seconds=0
+          verification_status=1
+          gerbil_version="unavailable"
+
+          if (( install_status == 0 )); then
+            verify_start_seconds=$SECONDS
+            set +e
+            gerbil_version="$(gxi -v 2>&1)"
+            version_status=$?
+            brew test tao3k/gerbil/gerbil-scheme
+            test_status=$?
+            set -e
+            verification_seconds=$((SECONDS - verify_start_seconds))
+            if (( version_status == 0 && test_status == 0 )); then
+              verification_status=0
+            fi
+          fi
+
+          completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          receipt="$RUNNER_TEMP/gerbil-bottle-capability-receipt.json"
+          jq -n \
+            --arg schema "homebrew.gerbil.bottle-capability-receipt.v1" \
+            --arg sourceRunId "$SOURCE_RUN_ID" \
+            --arg artifactName "$BOTTLE_ARTIFACT_NAME" \
+            --arg bottle "$(basename "$bottle_path")" \
+            --arg bottleSha256 "$bottle_sha256" \
+            --arg runner "${RUNNER_OS}-${RUNNER_ARCH}" \
+            --arg gerbilVersion "$gerbil_version" \
+            --arg startedAt "$started_at" \
+            --arg completedAt "$completed_at" \
+            --argjson installSeconds "$install_seconds" \
+            --argjson installBudgetSeconds "$BOTTLE_INSTALL_BUDGET_SECONDS" \
+            --argjson installStatus "$install_status" \
+            --argjson verificationSeconds "$verification_seconds" \
+            --argjson verificationStatus "$verification_status" \
+            '{schema: $schema, sourceRunId: $sourceRunId,
+              artifactName: $artifactName, bottle: $bottle,
+              bottleSha256: $bottleSha256, runner: $runner,
+              gerbilVersion: $gerbilVersion, startedAt: $startedAt,
+              completedAt: $completedAt, installSeconds: $installSeconds,
+              installBudgetSeconds: $installBudgetSeconds,
+              installStatus: $installStatus,
+              verificationSeconds: $verificationSeconds,
+              verificationStatus: $verificationStatus}' > "$receipt"
+
+          echo "receipt=$receipt" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Gerbil bottle capability"
+            echo "- Source run: ${SOURCE_RUN_ID}"
+            echo "- Install: ${install_seconds}s"
+            echo "- Budget: ${BOTTLE_INSTALL_BUDGET_SECONDS}s"
+            echo "- Verification: ${verification_seconds}s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( install_status != 0 )); then
+            exit "$install_status"
+          fi
+          if (( install_seconds > BOTTLE_INSTALL_BUDGET_SECONDS )); then
+            echo "bottle install exceeded ${BOTTLE_INSTALL_BUDGET_SECONDS}s budget" >&2
+            exit 1
+          fi
+          if (( verification_status != 0 )); then
+            echo "installed bottle failed runtime verification" >&2
+            exit 1
+          fi
+
+      - name: Upload bottle capability receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gerbil-bottle-capability-receipt_${{ env.SOURCE_RUN_ID }}
+          path: ${{ steps.bottle-verification.outputs.receipt }}
+          if-no-files-found: error
