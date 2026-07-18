@@ -8,6 +8,9 @@ class GerbilScheme < Formula
   url "https://github.com/mighty-gerbils/gerbil.git",
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
+
+  revision 1
+
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
   depends_on "coreutils" => :build

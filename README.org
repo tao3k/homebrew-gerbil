@@ -114,8 +114,11 @@ These packages are literate and tangled from this README.org.
 
   # Gerbil Scheme language implementation and toolchain.
   class GerbilScheme < Formula
-    <<start-pkg>>
-    <<deps-pkg>>
+  <<start-pkg>>
+
+  revision 1
+
+  <<deps-pkg>>
     on_macos do
       fails_with :gcc do
         cause "Gambit FFI bundles built with Homebrew GCC cannot resolve macOS libSystem symbols"
