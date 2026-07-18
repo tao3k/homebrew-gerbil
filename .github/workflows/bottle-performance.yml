@@ -57,6 +57,40 @@ jobs:
           run-id: ${{ env.SOURCE_RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Bind bottle provenance to the current formula
+        id: bottle-provenance
+        working-directory: bottles
+        shell: bash
+        run: |
+          shopt -s nullglob
+          bottles=(*.bottle.tar.gz)
+          if (( ${#bottles[@]} != 1 )); then
+            echo "expected exactly one arm64 macOS bottle, got ${#bottles[@]}" >&2
+            exit 1
+          fi
+
+          bottle_path="./${bottles[0]}"
+          formula_path="$GITHUB_WORKSPACE/Formula/gerbil-scheme.rb"
+          embedded_formula_path="$(tar -tzf "$bottle_path" | awk '/\/\.brew\/gerbil-scheme\.rb$/ {print}')"
+          if [[ ! -f "$formula_path" || -z "$embedded_formula_path" || "$embedded_formula_path" == *$'\n'* ]]; then
+            echo "could not resolve exactly one current and embedded formula" >&2
+            exit 1
+          fi
+
+          formula_sha256="$(shasum -a 256 "$formula_path" | awk '{print $1}')"
+          embedded_formula_sha256="$(tar -xOzf "$bottle_path" "$embedded_formula_path" | shasum -a 256 | awk '{print $1}')"
+          if [[ "$formula_sha256" != "$embedded_formula_sha256" ]]; then
+            echo "bottle formula does not match current PR formula" >&2
+            echo "current=$formula_sha256 embedded=$embedded_formula_sha256" >&2
+            exit 1
+          fi
+
+          {
+            echo "bottle=${bottles[0]}"
+            echo "formula_sha256=$formula_sha256"
+            echo "embedded_formula_sha256=$embedded_formula_sha256"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Verify fresh-runner bottle capability
         id: bottle-verification
         working-directory: bottles
@@ -68,14 +102,7 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         shell: bash
         run: |
-          shopt -s nullglob
-          bottles=(*.bottle.tar.gz)
-          if (( ${#bottles[@]} != 1 )); then
-            echo "expected exactly one arm64 macOS bottle, got ${#bottles[@]}" >&2
-            exit 1
-          fi
-
-          bottle_path="./${bottles[0]}"
+          bottle_path="./${{ steps.bottle-provenance.outputs.bottle }}"
           bottle_sha256="$(shasum -a 256 "$bottle_path" | awk '{print $1}')"
           started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           start_seconds=$SECONDS
@@ -112,8 +139,11 @@ jobs:
             --arg schema "homebrew.gerbil.bottle-capability-receipt.v1" \
             --arg sourceRunId "$SOURCE_RUN_ID" \
             --arg artifactName "$BOTTLE_ARTIFACT_NAME" \
+            --arg currentHeadSha "$GITHUB_SHA" \
             --arg bottle "$(basename "$bottle_path")" \
             --arg bottleSha256 "$bottle_sha256" \
+            --arg formulaSha256 "${{ steps.bottle-provenance.outputs.formula_sha256 }}" \
+            --arg embeddedFormulaSha256 "${{ steps.bottle-provenance.outputs.embedded_formula_sha256 }}" \
             --arg runner "${RUNNER_OS}-${RUNNER_ARCH}" \
             --arg gerbilVersion "$gerbil_version" \
             --arg startedAt "$started_at" \
@@ -124,8 +154,11 @@ jobs:
             --argjson verificationSeconds "$verification_seconds" \
             --argjson verificationStatus "$verification_status" \
             '{schema: $schema, sourceRunId: $sourceRunId,
-              artifactName: $artifactName, bottle: $bottle,
+              artifactName: $artifactName, currentHeadSha: $currentHeadSha,
+              bottle: $bottle,
               bottleSha256: $bottleSha256, runner: $runner,
+              formulaSha256: $formulaSha256,
+              embeddedFormulaSha256: $embeddedFormulaSha256,
               gerbilVersion: $gerbilVersion, startedAt: $startedAt,
               completedAt: $completedAt, installSeconds: $installSeconds,
               installBudgetSeconds: $installBudgetSeconds,
@@ -137,6 +170,7 @@ jobs:
           {
             echo "### Gerbil bottle capability"
             echo "- Source run: ${SOURCE_RUN_ID}"
+            echo "- Formula SHA-256: ${{ steps.bottle-provenance.outputs.formula_sha256 }}"
             echo "- Install: ${install_seconds}s"
             echo "- Budget: ${BOTTLE_INSTALL_BUDGET_SECONDS}s"
             echo "- Verification: ${verification_seconds}s"
@@ -153,6 +187,15 @@ jobs:
             echo "installed bottle failed runtime verification" >&2
             exit 1
           fi
+
+      - name: Promote verified bottle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: verified_bottles_macos-26
+          path: |
+            bottles/*.bottle.tar.gz
+            bottles/*.json
+          if-no-files-found: error
 
       - name: Upload bottle capability receipt
         if: always()

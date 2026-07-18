@@ -26,13 +26,20 @@ jobs:
       - name: Require a successful bottle capability receipt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ inputs.head_sha }}
           REPOSITORY: ${{ github.repository }}
           VERIFICATION_RUN_ID: ${{ inputs.verification_run_id }}
         run: |
           conclusion="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .conclusion)"
           workflow_name="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .name)"
-          if [[ "$workflow_name" != "verify bottle capability" || "$conclusion" != "success" ]]; then
-            echo "verification run ${VERIFICATION_RUN_ID} is not a successful bottle capability run" >&2
+          verification_head_sha="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .head_sha)"
+          artifact_count="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}/artifacts" \
+            --jq '[.artifacts[] | select(.name == "verified_bottles_macos-26" and .expired == false)] | length')"
+          if [[ "$workflow_name" != "verify bottle capability" ||
+                "$conclusion" != "success" ||
+                "$verification_head_sha" != "$HEAD_SHA" ||
+                "$artifact_count" != "1" ]]; then
+            echo "verification run ${VERIFICATION_RUN_ID} is not a matching promoted bottle run" >&2
             exit 1
           fi
 
@@ -49,7 +56,13 @@ jobs:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ inputs.head_sha }}
           PULL_REQUEST: ${{ inputs.pull_request }}
-        run: brew pr-pull --debug --tap="$GITHUB_REPOSITORY" --head-sha="$HEAD_SHA" "$PULL_REQUEST"
+        run: >-
+          brew pr-pull --debug
+          --tap="$GITHUB_REPOSITORY"
+          --head-sha="$HEAD_SHA"
+          --workflows=bottle-performance.yml
+          --artifact-pattern=verified_bottles_macos-26
+          "$PULL_REQUEST"
 
       - name: Push commits
         uses: Homebrew/actions/git-try-push@18fcb8e3e06b4247c676c506750dc95ea7226479 # 2026.07.13.1
