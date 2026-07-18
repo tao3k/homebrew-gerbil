@@ -1,0 +1,135 @@
+name: verify published bottle
+
+on:
+  workflow_dispatch:
+    inputs:
+      install_budget_seconds:
+        description: Maximum published bottle installation time
+        default: "120"
+        required: true
+        type: string
+  workflow_run:
+    workflows:
+      - brew pr-pull
+    types:
+      - completed
+
+concurrency:
+  group: published-bottle-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  published-bottle:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-26
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      FORMULA: tao3k/gerbil/gerbil-scheme
+      INSTALL_BUDGET_SECONDS: ${{ inputs.install_budget_seconds || '120' }}
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@18fcb8e3e06b4247c676c506750dc95ea7226479 # 2026.07.13.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify public bottle consumption
+        id: published-verification
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_BOTTLE_SOURCE_FALLBACK: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        shell: bash
+        run: |
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          start_seconds=$SECONDS
+
+          set +e
+          brew install --force-bottle "$FORMULA"
+          install_status=$?
+          set -e
+
+          install_seconds=$((SECONDS - start_seconds))
+          verification_seconds=0
+          verification_status=1
+          poured_from_bottle=false
+          gerbil_version="unavailable"
+
+          if (( install_status == 0 )); then
+            verify_start_seconds=$SECONDS
+            set +e
+            formula_info="$(brew info --json=v2 "$FORMULA" 2>/dev/null)"
+            info_status=$?
+            if (( info_status == 0 )); then
+              poured_from_bottle="$(jq -r '.formulae[0].installed[-1].poured_from_bottle // false' <<< "$formula_info")"
+            fi
+            gerbil_version="$(gxi -v 2>&1)"
+            version_status=$?
+            brew test "$FORMULA"
+            test_status=$?
+            set -e
+            verification_seconds=$((SECONDS - verify_start_seconds))
+            if (( info_status == 0 && version_status == 0 && test_status == 0 )) &&
+               [[ "$poured_from_bottle" == "true" ]]; then
+              verification_status=0
+            fi
+          fi
+
+          completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          receipt="$RUNNER_TEMP/gerbil-published-bottle-receipt.json"
+          jq -n \
+            --arg schema "homebrew.gerbil.published-bottle-receipt.v1" \
+            --arg formula "$FORMULA" \
+            --arg currentHeadSha "$GITHUB_SHA" \
+            --arg runner "${RUNNER_OS}-${RUNNER_ARCH}" \
+            --arg gerbilVersion "$gerbil_version" \
+            --arg startedAt "$started_at" \
+            --arg completedAt "$completed_at" \
+            --argjson pouredFromBottle "$poured_from_bottle" \
+            --argjson installSeconds "$install_seconds" \
+            --argjson installBudgetSeconds "$INSTALL_BUDGET_SECONDS" \
+            --argjson installStatus "$install_status" \
+            --argjson verificationSeconds "$verification_seconds" \
+            --argjson verificationStatus "$verification_status" \
+            '{schema: $schema, formula: $formula, currentHeadSha: $currentHeadSha,
+              runner: $runner, gerbilVersion: $gerbilVersion,
+              pouredFromBottle: $pouredFromBottle,
+              startedAt: $startedAt, completedAt: $completedAt,
+              installSeconds: $installSeconds,
+              installBudgetSeconds: $installBudgetSeconds,
+              installStatus: $installStatus,
+              verificationSeconds: $verificationSeconds,
+              verificationStatus: $verificationStatus}' > "$receipt"
+
+          echo "receipt=$receipt" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Published Gerbil bottle"
+            echo "- Formula: ${FORMULA}"
+            echo "- Poured from bottle: ${poured_from_bottle}"
+            echo "- Install: ${install_seconds}s"
+            echo "- Budget: ${INSTALL_BUDGET_SECONDS}s"
+            echo "- Verification: ${verification_seconds}s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( install_status != 0 )); then
+            exit "$install_status"
+          fi
+          if (( install_seconds > INSTALL_BUDGET_SECONDS )); then
+            echo "published bottle install exceeded ${INSTALL_BUDGET_SECONDS}s budget" >&2
+            exit 1
+          fi
+          if (( verification_status != 0 )); then
+            echo "published formula did not consume and verify the bottle" >&2
+            exit 1
+          fi
+
+      - name: Upload published bottle receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gerbil-published-bottle-receipt_${{ github.run_id }}
+          path: ${{ steps.published-verification.outputs.receipt }}
+          if-no-files-found: error
