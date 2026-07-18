@@ -7,11 +7,6 @@ on:
         description: Successful brew test-bot run containing the bottle artifact
         required: true
         type: string
-      artifact_name:
-        description: Bottle artifact produced by the source run
-        default: bottles_macos-26
-        required: true
-        type: string
       install_budget_seconds:
         description: Maximum fresh-runner bottle installation time
         default: "120"
@@ -33,16 +28,41 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'pull_request')
-    runs-on: macos-26
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       actions: read
       contents: read
     env:
       SOURCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
-      BOTTLE_ARTIFACT_NAME: ${{ inputs.artifact_name || 'bottles_macos-26' }}
+      BOTTLE_ARTIFACT_NAME: bottles_ubuntu-latest
       BOTTLE_INSTALL_BUDGET_SECONDS: ${{ inputs.install_budget_seconds || '120' }}
     steps:
+      - name: Resolve successful source run
+        id: source-run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          source_head_sha="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .head_sha)"
+          source_conclusion="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .conclusion)"
+          source_event="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .event)"
+          source_name="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .name)"
+          if [[ "$source_name" != "brew test-bot" ||
+                "$source_event" != "pull_request" ||
+                "$source_conclusion" != "success" ||
+                -z "$source_head_sha" ]]; then
+            echo "source run ${SOURCE_RUN_ID} is not a successful pull-request producer" >&2
+            exit 1
+          fi
+          echo "head_sha=$source_head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the source-run formula
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.source-run.outputs.head_sha }}
+
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@18fcb8e3e06b4247c676c506750dc95ea7226479 # 2026.07.13.1
         with:
@@ -65,7 +85,7 @@ jobs:
           shopt -s nullglob
           bottles=(*.bottle.tar.gz)
           if (( ${#bottles[@]} != 1 )); then
-            echo "expected exactly one arm64 macOS bottle, got ${#bottles[@]}" >&2
+            echo "expected exactly one x86_64 Linux bottle, got ${#bottles[@]}" >&2
             exit 1
           fi
 
@@ -77,8 +97,15 @@ jobs:
             exit 1
           fi
 
-          formula_sha256="$(shasum -a 256 "$formula_path" | awk '{print $1}')"
-          embedded_formula_sha256="$(tar -xOzf "$bottle_path" "$embedded_formula_path" | shasum -a 256 | awk '{print $1}')"
+          sha256_stream() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum
+            else
+              shasum -a 256
+            fi | awk '{print $1}'
+          }
+          formula_sha256="$(sha256_stream < "$formula_path")"
+          embedded_formula_sha256="$(tar -xOzf "$bottle_path" "$embedded_formula_path" | sha256_stream)"
           if [[ "$formula_sha256" != "$embedded_formula_sha256" ]]; then
             echo "bottle formula does not match current PR formula" >&2
             echo "current=$formula_sha256 embedded=$embedded_formula_sha256" >&2
@@ -103,7 +130,14 @@ jobs:
         shell: bash
         run: |
           bottle_path="./${{ steps.bottle-provenance.outputs.bottle }}"
-          bottle_sha256="$(shasum -a 256 "$bottle_path" | awk '{print $1}')"
+          sha256_file() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$1"
+            else
+              shasum -a 256 "$1"
+            fi | awk '{print $1}'
+          }
+          bottle_sha256="$(sha256_file "$bottle_path")"
           started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           start_seconds=$SECONDS
 
@@ -139,7 +173,7 @@ jobs:
             --arg schema "homebrew.gerbil.bottle-capability-receipt.v1" \
             --arg sourceRunId "$SOURCE_RUN_ID" \
             --arg artifactName "$BOTTLE_ARTIFACT_NAME" \
-            --arg currentHeadSha "$GITHUB_SHA" \
+            --arg currentHeadSha "${{ steps.source-run.outputs.head_sha }}" \
             --arg bottle "$(basename "$bottle_path")" \
             --arg bottleSha256 "$bottle_sha256" \
             --arg formulaSha256 "${{ steps.bottle-provenance.outputs.formula_sha256 }}" \
@@ -191,7 +225,7 @@ jobs:
       - name: Promote verified bottle artifact
         uses: actions/upload-artifact@v7
         with:
-          name: verified_bottles_macos-26
+          name: verified_bottles_ubuntu-latest
           path: |
             bottles/*.bottle.tar.gz
             bottles/*.json
@@ -201,6 +235,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: gerbil-bottle-capability-receipt_${{ env.SOURCE_RUN_ID }}
+          name: gerbil-bottle-capability-receipt_ubuntu-latest_${{ env.SOURCE_RUN_ID }}
           path: ${{ steps.bottle-verification.outputs.receipt }}
           if-no-files-found: error

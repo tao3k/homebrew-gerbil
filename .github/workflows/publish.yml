@@ -32,14 +32,36 @@ jobs:
         run: |
           conclusion="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .conclusion)"
           workflow_name="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .name)"
-          verification_head_sha="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .head_sha)"
           artifact_count="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}/artifacts" \
-            --jq '[.artifacts[] | select(.name == "verified_bottles_macos-26" and .expired == false)] | length')"
+            --jq '[.artifacts[] | select(.name == "verified_bottles_ubuntu-latest" and .expired == false)] | length')"
+          receipt_artifact_count="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}/artifacts" \
+            --jq '[.artifacts[] | select((.name | startswith("gerbil-bottle-capability-receipt_ubuntu-latest_")) and .expired == false)] | length')"
           if [[ "$workflow_name" != "verify bottle capability" ||
                 "$conclusion" != "success" ||
-                "$verification_head_sha" != "$HEAD_SHA" ||
-                "$artifact_count" != "1" ]]; then
+                "$artifact_count" != "1" ||
+                "$receipt_artifact_count" != "1" ]]; then
             echo "verification run ${VERIFICATION_RUN_ID} is not a matching promoted bottle run" >&2
+            exit 1
+          fi
+
+          receipt_dir="$RUNNER_TEMP/bottle-capability-receipt"
+          gh run download "$VERIFICATION_RUN_ID" \
+            --repo "$REPOSITORY" \
+            --pattern 'gerbil-bottle-capability-receipt_ubuntu-latest_*' \
+            --dir "$receipt_dir"
+          mapfile -t receipt_files < <(find "$receipt_dir" -type f -name '*.json')
+          if (( ${#receipt_files[@]} != 1 )); then
+            echo "expected exactly one bottle capability receipt" >&2
+            exit 1
+          fi
+
+          receipt="${receipt_files[0]}"
+          if [[ "$(jq -r .schema "$receipt")" != "homebrew.gerbil.bottle-capability-receipt.v1" ||
+                "$(jq -r .currentHeadSha "$receipt")" != "$HEAD_SHA" ||
+                "$(jq -r .installStatus "$receipt")" != "0" ||
+                "$(jq -r .verificationStatus "$receipt")" != "0" ||
+                "$(jq -r .formulaSha256 "$receipt")" != "$(jq -r .embeddedFormulaSha256 "$receipt")" ]]; then
+            echo "verification receipt does not authorize head ${HEAD_SHA}" >&2
             exit 1
           fi
 
@@ -61,7 +83,7 @@ jobs:
           --tap="$GITHUB_REPOSITORY"
           --head-sha="$HEAD_SHA"
           --workflows=bottle-performance.yml
-          --artifact-pattern=verified_bottles_macos-26
+          --artifact-pattern=verified_bottles_ubuntu-latest
           "$PULL_REQUEST"
 
       - name: Push commits

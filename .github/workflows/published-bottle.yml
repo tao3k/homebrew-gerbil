@@ -23,7 +23,11 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-26]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -79,7 +83,7 @@ jobs:
           fi
 
           completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          receipt="$RUNNER_TEMP/gerbil-published-bottle-receipt.json"
+          receipt="$RUNNER_TEMP/gerbil-published-bottle-receipt-${RUNNER_OS}-${RUNNER_ARCH}.json"
           jq -n \
             --arg schema "homebrew.gerbil.published-bottle-receipt.v1" \
             --arg formula "$FORMULA" \
@@ -130,6 +134,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: gerbil-published-bottle-receipt_${{ github.run_id }}
+          name: gerbil-published-bottle-receipt_${{ matrix.os }}_${{ github.run_id }}
           path: ${{ steps.published-verification.outputs.receipt }}
           if-no-files-found: error

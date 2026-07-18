@@ -13,11 +13,6 @@ class GerbilScheme < Formula
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
-  bottle do
-    root_url "https://github.com/tao3k/homebrew-gerbil/releases/download/gerbil-scheme-0.18.2_1"
-    sha256 arm64_tahoe: "912a79b4096b870f53e3f6fb56b1a79515d6f3996b8e0fb5d20af4d47b0c994a"
-  end
-
   depends_on "coreutils" => :build
   depends_on "pkg-config" => :build
   depends_on "openssl@3"
@@ -55,11 +50,15 @@ class GerbilScheme < Formula
     end
 
     system ENV.cc.to_s, "--version"
-    system "./configure",
-           "--prefix=#{prefix}",
-           "--enable-march=",
-           "--enable-smp",
-           "--disable-single-host"
+    configure_args = [
+      "--prefix=#{prefix}",
+      "--enable-march=",
+      "--enable-smp",
+      "--disable-single-host",
+    ]
+    # The pinned Gambit TTY backend must select a readiness backend on Linux.
+    configure_args << "--enable-poll" if OS.linux?
+    system "./configure", *configure_args
     inreplace "src/build.sh",
               'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
               'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \

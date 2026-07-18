@@ -19,11 +19,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-bot:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-15-intel, macos-26]
-    runs-on: ${{ matrix.os }}
+  linux-bottle-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       actions: read
       checks: read
@@ -40,8 +38,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.set-up-homebrew.outputs.gems-path }}
-          key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
-          restore-keys: ${{ matrix.os }}-rubygems-
+          key: ubuntu-latest-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ubuntu-latest-rubygems-
 
       - run: brew test-bot --only-cleanup-before
 
@@ -49,12 +47,76 @@ jobs:
 
       - run: brew test-bot --only-tap-syntax
 
-      - run: brew test-bot --only-formulae
+      - name: Build Linux bottle from source
+        id: linux-bottle-build
         if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          build_budget_seconds=1500
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          start_seconds=$SECONDS
+
+          set +e
+          timeout --signal=TERM --kill-after=30s "${build_budget_seconds}s" \
+            brew test-bot --only-formulae
+          build_status=$?
+          set -e
+
+          build_seconds=$((SECONDS - start_seconds))
+          completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          available_cores="$(getconf _NPROCESSORS_ONLN)"
+          shopt -s nullglob
+          bottles=(*.bottle.tar.gz)
+          bottle_count=${#bottles[@]}
+          capability_status=0
+          if (( build_status != 0 || bottle_count != 1 )); then
+            capability_status=1
+          fi
+
+          receipt="$RUNNER_TEMP/gerbil-linux-bottle-source-receipt.json"
+          jq -n \
+            --arg schema "homebrew.gerbil.linux-bottle-source-receipt.v1" \
+            --arg headSha "$GITHUB_SHA" \
+            --arg runner "${RUNNER_OS}-${RUNNER_ARCH}" \
+            --arg startedAt "$started_at" \
+            --arg completedAt "$completed_at" \
+            --argjson availableCores "$available_cores" \
+            --argjson buildSeconds "$build_seconds" \
+            --argjson buildBudgetSeconds "$build_budget_seconds" \
+            --argjson buildStatus "$build_status" \
+            --argjson bottleCount "$bottle_count" \
+            --argjson capabilityStatus "$capability_status" \
+            '{schema: $schema, headSha: $headSha, runner: $runner,
+              availableCores: $availableCores,
+              startedAt: $startedAt, completedAt: $completedAt,
+              buildSeconds: $buildSeconds,
+              buildBudgetSeconds: $buildBudgetSeconds,
+              buildStatus: $buildStatus, bottleCount: $bottleCount,
+              capabilityStatus: $capabilityStatus}' > "$receipt"
+          echo "receipt=$receipt" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Gerbil Linux source bottle"
+            echo "- Build: ${build_seconds}s"
+            echo "- Budget: ${build_budget_seconds}s"
+            echo "- Available cores: ${available_cores}"
+            echo "- Bottles: ${bottle_count}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$capability_status"
+
+      - name: Upload Linux source build receipt
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: gerbil-linux-bottle-source-receipt_${{ github.run_id }}
+          path: ${{ steps.linux-bottle-build.outputs.receipt }}
+          if-no-files-found: error
 
       - name: Upload bottles as artifact
         if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7
         with:
-          name: bottles_${{ matrix.os }}
+          name: bottles_ubuntu-latest
           path: '*.bottle.*'
+          if-no-files-found: error

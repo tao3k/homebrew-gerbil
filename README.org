@@ -68,11 +68,15 @@ These packages are literate and tangled from this README.org.
     end
 
     system ENV.cc.to_s, "--version"
-    system "./configure",
-           "--prefix=#{prefix}",
-           "--enable-march=",
-           "--enable-smp",
-           "--disable-single-host"
+    configure_args = [
+      "--prefix=#{prefix}",
+      "--enable-march=",
+      "--enable-smp",
+      "--disable-single-host",
+    ]
+    # The pinned Gambit TTY backend must select a readiness backend on Linux.
+    configure_args << "--enable-poll" if OS.linux?
+    system "./configure", *configure_args
     inreplace "src/build.sh",
               'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
               'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \
@@ -156,6 +160,43 @@ These packages are literate and tangled from this README.org.
 #+end_src
 
 * HACKING
+
+** Formula generation
+
+~Formula/gerbil-scheme.rb~ is generated from the Ruby blocks in this file. Keep
+the Org blocks as the source of truth, then tangle and apply Homebrew's
+deterministic formatter:
+
+#+begin_src sh
+emacs --batch README.org --funcall org-babel-tangle
+brew style --fix Formula/gerbil-scheme.rb
+#+end_src
+
+** Bottle capability lifecycle
+
+The ordinary pull-request producer builds only the missing Linux bottle. The
+published arm64 macOS bottle remains an existing capability and is not rebuilt
+from source for a Linux-only configuration correction. After publication, both
+platforms must pass the same forced-bottle consumption contract.
+
+#+begin_src mermaid
+flowchart LR
+  S["Pinned Gerbil source"] --> L["Linux source producer (25 minute guard)"]
+  L --> A["Exactly one Linux bottle artifact"]
+  A --> V["Fresh Linux artifact verification"]
+  V --> P["Verified-artifact-only publication"]
+  P --> CL["Published Linux consumer"]
+  P --> CM["Published macOS consumer"]
+#+end_src
+
+The producer is fail-closed: a swallowed =brew test-bot= failure, a timeout, or
+an artifact count other than one fails the job. Its JSON receipt records the
+available runner cores, elapsed build time, the 1,500-second budget, the raw
+build status, and the bottle count. The verifier binds the bottle's embedded
+formula to the pull-request formula before installation and runtime tests. The
+publisher accepts only that promoted artifact. The final workflow disables
+source fallback and records whether Homebrew actually poured the public bottle
+on both Linux and macOS.
 
 Trying to make it work for the github thing often means fixing a of
 whitespace and other styles that are frowned upon.
