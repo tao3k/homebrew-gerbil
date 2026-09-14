@@ -1,7 +1,7 @@
 ;;; -*- Gerbil -*-
 ;;; Minimal native std/make cold/warm Scenario.
 
-(import :gerbil/gambit "./benchmark-support")
+(import :gerbil/runtime/gambit "./benchmark-support")
 
 (def (main . _)
   (let* ((scenario-root (current-directory))

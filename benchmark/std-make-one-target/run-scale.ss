@@ -1,7 +1,7 @@
 ;;; -*- Gerbil -*-
 ;;; Package/macro scale Scenario with one measured aggregate target.
 
-(import :gerbil/gambit "./benchmark-support")
+(import :gerbil/runtime/gambit "./benchmark-support")
 
 (def (write-source path writer)
   (call-with-output-file path writer))

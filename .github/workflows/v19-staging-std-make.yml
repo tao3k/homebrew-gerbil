@@ -5,7 +5,7 @@ on:
     inputs:
       upstream_ref:
         description: Gerbil source branch or revision
-        default: v0.19-staging
+        default: 3964ba4eafae414201e408742a847c404ba755ef
         required: true
         type: string
       warm_budget_seconds:
@@ -27,23 +27,24 @@ concurrency:
 jobs:
   benchmark:
     runs-on: macos-26
-    timeout-minutes: 150
+    timeout-minutes: 180
     permissions:
       contents: read
     env:
-      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || 'v0.19-staging' }}
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '3964ba4eafae414201e408742a847c404ba755ef' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
     steps:
       - name: Check out tap benchmark
         uses: actions/checkout@v6
 
       - name: Check out requested Gerbil revision
-        uses: actions/checkout@v6
-        with:
-          repository: mighty-gerbils/gerbil
-          ref: ${{ env.GERBIL_SOURCE_REF }}
-          fetch-depth: 1
-          path: upstream-gerbil
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream-gerbil
+          git -C upstream-gerbil remote add origin https://git.cons.io/mighty-gerbils/gerbil.git
+          git -C upstream-gerbil fetch --depth=1 origin "$GERBIL_SOURCE_REF"
+          git -C upstream-gerbil checkout --detach FETCH_HEAD
 
       - name: Resolve immutable upstream revision
         id: upstream
@@ -69,7 +70,10 @@ jobs:
 
       - name: Install native dependencies
         if: steps.gerbil-cache.outputs.cache-hit != 'true'
-        run: brew install coreutils pkg-config openssl@3 sqlite zlib
+        run: brew install pkg-config openssl@3 sqlite zlib
+
+      - name: Install benchmark runtime dependencies
+        run: brew install coreutils
 
       - name: Resolve native build capacity
         shell: bash
@@ -87,7 +91,6 @@ jobs:
           set -euo pipefail
           receipt="$RUNNER_TEMP/v19-staging-toolchain-build.log"
           ./configure --prefix="$GERBIL_PREFIX"
-          echo "(def (gerbil-version-string) \"v0.19-staging-${{ steps.upstream.outputs.sha }}\")" > src/gerbil/runtime/version.ss
           for target in prepare gambit boot-gxi stage0 stage1 stdlib; do
             started="$(date +%s)"
             echo "target=$target phase=start cores=$GERBIL_BUILD_CORES" | tee -a "$receipt"
@@ -97,11 +100,22 @@ jobs:
           done
           ./install.sh
 
+      - name: Save exact Gerbil toolchain
+        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.GERBIL_PREFIX }}
+          key: gerbil-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
+
       - name: Verify toolchain identity
         shell: bash
         run: |
           echo "$GERBIL_PREFIX/bin" >> "$GITHUB_PATH"
-          "$GERBIL_PREFIX/bin/gxi" -v
+          toolchain_version="$("$GERBIL_PREFIX/bin/gxi" -v)"
+          short_sha="${{ steps.upstream.outputs.sha }}"
+          short_sha="${short_sha:0:7}"
+          echo "$toolchain_version"
+          [[ "$toolchain_version" == *"$short_sha"* ]]
           "$GERBIL_PREFIX/bin/gxi" -e '(begin (import :std/make) (displayln "std/make import ready"))'
 
       - name: Measure cold and warm native std/make

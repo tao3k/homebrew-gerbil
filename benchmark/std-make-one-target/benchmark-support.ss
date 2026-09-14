@@ -1,7 +1,7 @@
 ;;; -*- Gerbil -*-
 ;;; Shared native Gerbil benchmark functions. Scenario runners own only values.
 
-(import :gerbil/gambit
+(import :gerbil/runtime/gambit
         (only-in :std/misc/ports read-all-as-string)
         (only-in :std/misc/process run-process)
         (only-in :std/sort sort)
@@ -37,7 +37,7 @@
                    (getenv "GERBIL_BUILD_CORES" "4"))
     (string-append "GERBIL_BUILD_VERBOSE="
                    (getenv "GERBIL_BUILD_VERBOSE" "1"))
-    "timeout" "--signal=TERM" "--kill-after=3s" "30s"]
+    "gtimeout" "--signal=TERM" "--kill-after=3s" "30s"]
    arguments))
 
 (def (benchmark-compile-count output)
