@@ -1,0 +1,120 @@
+name: v0.19 staging std make benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Gerbil source branch or revision
+        default: v0.19-staging
+        required: true
+        type: string
+      warm_budget_seconds:
+        description: Maximum accepted median warm std/make wall time
+        default: "19"
+        required: true
+        type: string
+  push:
+    branches:
+      - ci/v19-staging-std-make
+    paths:
+      - benchmark/std-make-one-target/**
+      - .github/workflows/v19-staging-std-make.yml
+
+concurrency:
+  group: v19-staging-std-make-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: macos-26
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || 'v0.19-staging' }}
+      WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
+      GERBIL_PREFIX: ${{ runner.temp }}/gerbil-v19
+      GERBIL_BUILD_CORES: "4"
+    steps:
+      - name: Check out tap benchmark
+        uses: actions/checkout@v6
+
+      - name: Check out requested Gerbil revision
+        uses: actions/checkout@v6
+        with:
+          repository: mighty-gerbils/gerbil
+          ref: ${{ env.GERBIL_SOURCE_REF }}
+          fetch-depth: 1
+          path: upstream-gerbil
+
+      - name: Resolve immutable upstream revision
+        id: upstream
+        shell: bash
+        run: |
+          upstream_sha="$(git -C upstream-gerbil rev-parse HEAD)"
+          upstream_subject="$(git -C upstream-gerbil log -1 --format=%s)"
+          echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Gerbil v0.19 staging source"
+            echo "- Requested ref: \`$GERBIL_SOURCE_REF\`"
+            echo "- Resolved SHA: \`$upstream_sha\`"
+            echo "- Commit: $upstream_subject"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore exact Gerbil toolchain
+        id: gerbil-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.GERBIL_PREFIX }}
+          key: gerbil-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
+
+      - name: Install native dependencies
+        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        run: brew install coreutils pkg-config openssl@3 sqlite zlib
+
+      - name: Build exact v0.19 staging toolchain
+        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        working-directory: upstream-gerbil
+        shell: bash
+        run: |
+          ./configure --prefix="$GERBIL_PREFIX"
+          echo "(def (gerbil-version-string) \"v0.19-staging-${{ steps.upstream.outputs.sha }}\")" > src/gerbil/runtime/version.ss
+          make -j"$GERBIL_BUILD_CORES"
+          make install
+
+      - name: Verify toolchain identity
+        shell: bash
+        run: |
+          echo "$GERBIL_PREFIX/bin" >> "$GITHUB_PATH"
+          "$GERBIL_PREFIX/bin/gxi" -v
+          "$GERBIL_PREFIX/bin/gxi" -e '(begin (import :std/make) (displayln "std/make import ready"))'
+
+      - name: Measure cold and warm native std/make
+        id: benchmark
+        working-directory: benchmark/std-make-one-target
+        shell: bash
+        env:
+          GERBIL_BUILD_VERBOSE: "1"
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+        run: ./run.sh
+
+      - name: Measure scaled one-target import closure
+        id: scale-benchmark
+        working-directory: benchmark/std-make-one-target
+        shell: bash
+        env:
+          GERBIL_BUILD_VERBOSE: "1"
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+          SCALE_PACKAGE_COUNT: "8"
+          SCALE_MODULES_PER_PACKAGE: "16"
+        run: ./run-scale.sh
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v19-staging-std-make-${{ steps.upstream.outputs.sha }}
+          path: |
+            ${{ runner.temp }}/v19-staging-std-make*-receipt.json
+            ${{ runner.temp }}/std-make-*.log
+          if-no-files-found: error
