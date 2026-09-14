@@ -8,7 +8,7 @@ The workflow runs two controls against the exact SHA resolved from
 
 - `build.ss` compiles one module importing the precompiled `:std/interface` and
   then repeats the unchanged build three times.
-- `run-scale.sh` generates eight independent Gerbil packages. Each package owns
+- `run-scale.ss` generates eight independent Gerbil packages. Each package owns
   sixteen modules exporting hygienic `defrules` macros and one public interface.
   A separate application package imports all eight interfaces and expands all
   128 macros, while its measured build spec contains exactly one target.
@@ -19,3 +19,7 @@ A valid warm receipt has zero compile jobs. The receipt classifies the warm p50
 as below 13 seconds, within the previously observed 13–19 second band, or above
 the configured budget. Runner identity, upstream ref and immutable SHA are
 included so results from different Gerbil revisions are not conflated.
+
+Both runners are Scheme Scenarios. They reuse Gerbil's process, string, sorting
+and filesystem libraries and emit Scheme datum receipts; no shell runner owns
+generation, sampling, statistics or admission.
