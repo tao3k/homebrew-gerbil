@@ -33,7 +33,6 @@ jobs:
     env:
       GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || 'v0.19-staging' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
-      GERBIL_PREFIX: ${{ runner.temp }}/gerbil-v19
       GERBIL_BUILD_CORES: "4"
     steps:
       - name: Check out tap benchmark
@@ -54,6 +53,7 @@ jobs:
           upstream_sha="$(git -C upstream-gerbil rev-parse HEAD)"
           upstream_subject="$(git -C upstream-gerbil log -1 --format=%s)"
           echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19" >> "$GITHUB_ENV"
           {
             echo "### Gerbil v0.19 staging source"
             echo "- Requested ref: \`$GERBIL_SOURCE_REF\`"
