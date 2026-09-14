@@ -45,6 +45,7 @@ jobs:
           git -C upstream-gerbil remote add origin https://git.cons.io/mighty-gerbils/gerbil.git
           git -C upstream-gerbil fetch --depth=1 origin "$GERBIL_SOURCE_REF"
           git -C upstream-gerbil checkout --detach FETCH_HEAD
+          git -C upstream-gerbil submodule update --init --depth=1
 
       - name: Resolve immutable upstream revision
         id: upstream
