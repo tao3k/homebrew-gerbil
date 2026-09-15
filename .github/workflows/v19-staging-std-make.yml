@@ -59,12 +59,14 @@ jobs:
         id: upstream
         shell: bash
         run: |
-          upstream_sha="$(git -C upstream-gerbil rev-parse HEAD)"
-          upstream_subject="$(git -C upstream-gerbil log -1 --format=%s)"
+          upstream_sha="$(git -C upstream-gerbil rev-parse FETCH_HEAD)"
+          upstream_subject="$(git -C upstream-gerbil log -1 --format=%s FETCH_HEAD)"
           echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
-          echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19" >> "$GITHUB_ENV"
-          echo "GERBIL_RELEASE_TAG=gerbil-scheme-v0.19-$upstream_sha-darwin-arm64" >> "$GITHUB_ENV"
-          echo "GERBIL_RELEASE_ARCHIVE=gerbil-scheme-v0.19-$upstream_sha-darwin-arm64.tar.gz" >> "$GITHUB_ENV"
+          {
+            echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19"
+            echo "GERBIL_RELEASE_TAG=gerbil-scheme-v0.19-$upstream_sha-darwin-arm64"
+            echo "GERBIL_RELEASE_ARCHIVE=gerbil-scheme-v0.19-$upstream_sha-darwin-arm64.tar.gz"
+          } >> "$GITHUB_ENV"
           {
             echo "### Gerbil v0.19 staging source"
             echo "- Requested ref: \`$GERBIL_SOURCE_REF\`"
