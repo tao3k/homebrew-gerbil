@@ -126,7 +126,7 @@ jobs:
         env:
           GERBIL_BUILD_VERBOSE: "1"
           UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
-        run: $GERBIL_PREFIX/bin/gxi ./run.ss
+        run: '"$GERBIL_PREFIX/bin/gxi" ./run.ss'
 
       - name: Measure scaled one-target import closure
         id: scale-benchmark
@@ -137,7 +137,7 @@ jobs:
           UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
           SCALE_PACKAGE_COUNT: "8"
           SCALE_MODULES_PER_PACKAGE: "16"
-        run: $GERBIL_PREFIX/bin/gxi ./run-scale.ss
+        run: '"$GERBIL_PREFIX/bin/gxi" ./run-scale.ss'
 
       - name: Upload benchmark evidence
         if: always()
