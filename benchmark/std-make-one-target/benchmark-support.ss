@@ -3,10 +3,7 @@
 
 (import :gerbil/runtime/gambit
         (only-in :std/misc/ports read-all-as-string)
-        (only-in :std/misc/process run-process)
-        (only-in :std/sort sort)
-        (only-in :std/srfi/1 count)
-        (only-in :std/srfi/13 string-prefix? string-split))
+        (only-in :std/misc/process run-process))
 
 (export benchmark-temporary-root
         benchmark-gxi
@@ -41,8 +38,9 @@
    arguments))
 
 (def (benchmark-compile-count output)
-  (count (lambda (line) (string-prefix? "... compile " line))
-         (string-split output #\newline)))
+  (length
+   (filter (lambda (line) (string-prefix? "... compile " line))
+           (string-split output #\newline))))
 
 (def (benchmark-measure label image directory arguments)
   (displayln "[std-make-benchmark] phase=" label " event=process-start")
@@ -72,10 +70,10 @@
 
 (def (benchmark-warm-p50 samples)
   (list-ref
-   (sort (map (lambda (sample)
-                (benchmark-sample-ref sample 'elapsedNs))
-              samples)
-         <)
+   (list-sort <
+              (map (lambda (sample)
+                     (benchmark-sample-ref sample 'elapsedNs))
+                   samples))
    (quotient (length samples) 2)))
 
 (def (benchmark-series-compile-count samples)
