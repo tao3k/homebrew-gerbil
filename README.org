@@ -64,15 +64,21 @@ These packages are literate and tangled from this README.org.
     ENV.append "LDFLAGS", "-L#{formula_opt_lib("openssl@3")}"
     if OS.mac?
       ENV.append "CPPFLAGS", "-isysroot #{MacOS.sdk_path}"
-      ENV.append "LDFLAGS", "-Wl,-ld_classic"
     end
 
     system ENV.cc.to_s, "--version"
     system "./configure",
            "--prefix=#{prefix}",
-           "--enable-march=",
+           "--enable-march=native",
            "--enable-smp",
-           "--disable-single-host"
+           "--enable-single-host=0",
+           "--enable-optimized-module-limit=0",
+           "--enable-c-opt=no",
+           "--enable-c-opt-rts=yes",
+           "--enable-inline-jumps",
+           "--enable-dynamic-clib",
+           "--enable-trust-c-tco",
+           "--enable-default-runtime-options=tE8,f8,-8"
     inreplace "src/build.sh",
               'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
               'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \
