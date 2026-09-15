@@ -15,7 +15,11 @@ on:
         type: string
   push:
     branches:
-      - ci/v19-staging-std-make
+      - main
+    paths:
+      - benchmark/std-make-one-target/**
+      - .github/workflows/v19-staging-std-make.yml
+  pull_request:
     paths:
       - benchmark/std-make-one-target/**
       - .github/workflows/v19-staging-std-make.yml
