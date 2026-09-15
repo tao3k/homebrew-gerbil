@@ -1,0 +1,151 @@
+name: v0.19 staging std make benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Gerbil source branch or revision
+        default: 3964ba4eafae414201e408742a847c404ba755ef
+        required: true
+        type: string
+      warm_budget_seconds:
+        description: Maximum accepted median warm std/make wall time
+        default: "19"
+        required: true
+        type: string
+  push:
+    branches:
+      - ci/v19-staging-std-make
+    paths:
+      - benchmark/std-make-one-target/**
+      - .github/workflows/v19-staging-std-make.yml
+
+concurrency:
+  group: v19-staging-std-make-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: macos-26
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '3964ba4eafae414201e408742a847c404ba755ef' }}
+      WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
+    steps:
+      - name: Check out tap benchmark
+        uses: actions/checkout@v6
+
+      - name: Check out requested Gerbil revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream-gerbil
+          git -C upstream-gerbil remote add origin https://git.cons.io/mighty-gerbils/gerbil.git
+          git -C upstream-gerbil fetch --depth=1 origin "$GERBIL_SOURCE_REF"
+          git -C upstream-gerbil checkout --detach FETCH_HEAD
+          git -C upstream-gerbil submodule update --init --depth=1
+
+      - name: Resolve immutable upstream revision
+        id: upstream
+        shell: bash
+        run: |
+          upstream_sha="$(git -C upstream-gerbil rev-parse HEAD)"
+          upstream_subject="$(git -C upstream-gerbil log -1 --format=%s)"
+          echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19" >> "$GITHUB_ENV"
+          {
+            echo "### Gerbil v0.19 staging source"
+            echo "- Requested ref: \`$GERBIL_SOURCE_REF\`"
+            echo "- Resolved SHA: \`$upstream_sha\`"
+            echo "- Commit: $upstream_subject"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore exact Gerbil toolchain
+        id: gerbil-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.GERBIL_PREFIX }}
+          key: gerbil-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
+
+      - name: Install native dependencies
+        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        run: brew install pkg-config openssl@3 sqlite zlib
+
+      - name: Install benchmark runtime dependencies
+        run: brew install coreutils
+
+      - name: Resolve native build capacity
+        shell: bash
+        run: |
+          cores="$(sysctl -n hw.logicalcpu)"
+          [[ "$cores" =~ ^[1-9][0-9]*$ ]]
+          echo "GERBIL_BUILD_CORES=$cores" >> "$GITHUB_ENV"
+          echo "Native Gerbil build capacity: $cores logical cores"
+
+      - name: Build exact v0.19 staging toolchain
+        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        working-directory: upstream-gerbil
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/v19-staging-toolchain-build.log"
+          ./configure --prefix="$GERBIL_PREFIX"
+          for target in prepare gambit boot-gxi stage0 stage1 stdlib; do
+            started="$(date +%s)"
+            echo "target=$target phase=start cores=$GERBIL_BUILD_CORES" | tee -a "$receipt"
+            GERBIL_BUILD_FLAGS="-j$GERBIL_BUILD_CORES" ./build.sh "$target"
+            elapsed="$(( $(date +%s) - started ))"
+            echo "target=$target phase=complete elapsedSeconds=$elapsed" | tee -a "$receipt"
+          done
+          ./install.sh
+
+      - name: Save exact Gerbil toolchain
+        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.GERBIL_PREFIX }}
+          key: gerbil-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
+
+      - name: Verify toolchain identity
+        shell: bash
+        run: |
+          echo "$GERBIL_PREFIX/bin" >> "$GITHUB_PATH"
+          toolchain_version="$("$GERBIL_PREFIX/bin/gxi" -v)"
+          short_sha="${{ steps.upstream.outputs.sha }}"
+          short_sha="${short_sha:0:7}"
+          echo "$toolchain_version"
+          [[ "$toolchain_version" == *"$short_sha"* ]]
+          "$GERBIL_PREFIX/bin/gxi" -e '(begin (import :std/make) (displayln "std/make import ready"))'
+
+      - name: Measure cold and warm native std/make
+        id: benchmark
+        working-directory: benchmark/std-make-one-target
+        shell: bash
+        env:
+          GERBIL_BUILD_VERBOSE: "1"
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+        run: $GERBIL_PREFIX/bin/gxi ./run.ss
+
+      - name: Measure scaled one-target import closure
+        id: scale-benchmark
+        working-directory: benchmark/std-make-one-target
+        shell: bash
+        env:
+          GERBIL_BUILD_VERBOSE: "1"
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+          SCALE_PACKAGE_COUNT: "8"
+          SCALE_MODULES_PER_PACKAGE: "16"
+        run: $GERBIL_PREFIX/bin/gxi ./run-scale.ss
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v19-staging-std-make-${{ steps.upstream.outputs.sha }}
+          path: |
+            ${{ runner.temp }}/v19-staging-std-make*-receipt.ss
+            ${{ runner.temp }}/v19-staging-toolchain-build.log
+            ${{ runner.temp }}/std-make-*.log
+          if-no-files-found: warn
