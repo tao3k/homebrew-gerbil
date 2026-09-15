@@ -13,6 +13,11 @@ on:
         default: "19"
         required: true
         type: string
+      publish_release:
+        description: Publish the exact cached toolchain; build only when the release cache is empty
+        default: false
+        required: true
+        type: boolean
   push:
     branches:
       - main
@@ -33,23 +38,22 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 180
     permissions:
-      contents: read
+      contents: write
     env:
       GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '3964ba4eafae414201e408742a847c404ba755ef' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
     steps:
       - name: Check out tap benchmark
         uses: actions/checkout@v6
 
-      - name: Check out requested Gerbil revision
+      - name: Resolve requested Gerbil revision
         shell: bash
         run: |
           set -euo pipefail
           git init upstream-gerbil
           git -C upstream-gerbil remote add origin https://git.cons.io/mighty-gerbils/gerbil.git
           git -C upstream-gerbil fetch --depth=1 origin "$GERBIL_SOURCE_REF"
-          git -C upstream-gerbil checkout --detach FETCH_HEAD
-          git -C upstream-gerbil submodule update --init --depth=1
 
       - name: Resolve immutable upstream revision
         id: upstream
@@ -59,6 +63,8 @@ jobs:
           upstream_subject="$(git -C upstream-gerbil log -1 --format=%s)"
           echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
           echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19" >> "$GITHUB_ENV"
+          echo "GERBIL_RELEASE_TAG=gerbil-scheme-v0.19-$upstream_sha-darwin-arm64" >> "$GITHUB_ENV"
+          echo "GERBIL_RELEASE_ARCHIVE=gerbil-scheme-v0.19-$upstream_sha-darwin-arm64.tar.gz" >> "$GITHUB_ENV"
           {
             echo "### Gerbil v0.19 staging source"
             echo "- Requested ref: \`$GERBIL_SOURCE_REF\`"
@@ -68,17 +74,32 @@ jobs:
 
       - name: Restore exact Gerbil toolchain
         id: gerbil-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.GERBIL_PREFIX }}
           key: gerbil-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
 
-      - name: Install native dependencies
-        if: steps.gerbil-cache.outputs.cache-hit != 'true'
-        run: brew install pkg-config openssl@3 sqlite zlib
+      - name: Install native and benchmark dependencies
+        run: brew install coreutils pkg-config openssl@3 sqlite zlib
 
-      - name: Install benchmark runtime dependencies
-        run: brew install coreutils
+      - name: Download the released v0.19 toolchain on cache miss
+        if: steps.gerbil-cache.outputs.cache-hit != 'true' && inputs.publish_release != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/v19-release"
+          mkdir -p "$release_dir"
+          gh release download "$GERBIL_RELEASE_TAG" \
+            --repo "$RELEASE_REPOSITORY" \
+            --dir "$release_dir" \
+            --pattern "$GERBIL_RELEASE_ARCHIVE" \
+            --pattern "$GERBIL_RELEASE_ARCHIVE.sha256"
+          (cd "$release_dir" && shasum -a 256 -c "$GERBIL_RELEASE_ARCHIVE.sha256")
+          rm -rf "$GERBIL_PREFIX"
+          tar -xzf "$release_dir/$GERBIL_RELEASE_ARCHIVE" -C "$RUNNER_TEMP"
+          test -x "$GERBIL_PREFIX/bin/gxi"
 
       - name: Resolve native build capacity
         shell: bash
@@ -88,8 +109,16 @@ jobs:
           echo "GERBIL_BUILD_CORES=$cores" >> "$GITHUB_ENV"
           echo "Native Gerbil build capacity: $cores logical cores"
 
+      - name: Materialize v0.19 sources for an explicit release build
+        if: steps.gerbil-cache.outputs.cache-hit != 'true' && inputs.publish_release == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C upstream-gerbil checkout --detach FETCH_HEAD
+          git -C upstream-gerbil submodule update --init --depth=1
+
       - name: Build exact v0.19 staging toolchain
-        if: steps.gerbil-cache.outputs.cache-hit != 'true'
+        if: steps.gerbil-cache.outputs.cache-hit != 'true' && inputs.publish_release == true
         working-directory: upstream-gerbil
         shell: bash
         run: |
@@ -122,6 +151,33 @@ jobs:
           echo "$toolchain_version"
           [[ "$toolchain_version" == *"$short_sha"* ]]
           "$GERBIL_PREFIX/bin/gxi" -e '(begin (import :std/make) (displayln "std/make import ready"))'
+
+      - name: Publish the verified v0.19 toolchain
+        if: inputs.publish_release == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/v19-release"
+          mkdir -p "$release_dir"
+          archive="$release_dir/$GERBIL_RELEASE_ARCHIVE"
+          tar -czf "$archive" -C "$RUNNER_TEMP" "$(basename "$GERBIL_PREFIX")"
+          (
+            cd "$release_dir"
+            shasum -a 256 "$GERBIL_RELEASE_ARCHIVE" > "$GERBIL_RELEASE_ARCHIVE.sha256"
+          )
+          if gh release view "$GERBIL_RELEASE_TAG" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
+            echo "immutable v0.19 release already exists: $GERBIL_RELEASE_TAG" >&2
+            exit 1
+          fi
+          gh release create "$GERBIL_RELEASE_TAG" \
+            "$archive" \
+            "$archive.sha256" \
+            --repo "$RELEASE_REPOSITORY" \
+            --target "${{ github.sha }}" \
+            --title "$GERBIL_RELEASE_TAG" \
+            --notes "Exact Gerbil v0.19 toolchain for Darwin arm64 at ${{ steps.upstream.outputs.sha }}. CI cache misses must download this immutable archive instead of rebuilding Gerbil."
 
       - name: Measure cold and warm native std/make
         id: benchmark
