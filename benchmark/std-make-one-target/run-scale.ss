@@ -124,7 +124,8 @@
             (append
              (map (lambda (package-root)
                     (benchmark-measure 'seed-package image package-root
-                                       [gxi "./build.ss"]))
+                                       [gxi "./build.ss"]
+                                       timeout: "60s"))
                   package-roots)
              (list (benchmark-measure 'seed-app image app-root
                                       [gxi "./build-one.ss"]))))

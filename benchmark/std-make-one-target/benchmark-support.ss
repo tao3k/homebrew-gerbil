@@ -26,7 +26,7 @@
 (def (benchmark-gxi)
   (path-expand "bin/gxi" (getenv "GERBIL_PREFIX" "/opt/homebrew")))
 
-(def (benchmark-command image arguments)
+(def (benchmark-command image timeout arguments)
   (append
    ["env"
     (string-append "GERBIL_PATH=" image)
@@ -34,7 +34,7 @@
                    (getenv "GERBIL_BUILD_CORES" "4"))
     (string-append "GERBIL_BUILD_VERBOSE="
                    (getenv "GERBIL_BUILD_VERBOSE" "1"))
-    "gtimeout" "--signal=TERM" "--kill-after=3s" "30s"]
+    "gtimeout" "--signal=TERM" "--kill-after=3s" timeout]
    arguments))
 
 (def (benchmark-compile-count output)
@@ -42,12 +42,13 @@
    (filter (lambda (line) (string-prefix? "... compile " line))
            (string-split output #\newline))))
 
-(def (benchmark-measure label image directory arguments)
+(def (benchmark-measure label image directory arguments
+                        timeout: (timeout "30s"))
   (displayln "[std-make-benchmark] phase=" label " event=process-start")
   (force-output)
   (let* ((started (current-jiffy))
          (output
-          (run-process (benchmark-command image arguments)
+          (run-process (benchmark-command image timeout arguments)
                        directory: directory
                        stderr-redirection: #t
                        coprocess: read-all-as-string))
