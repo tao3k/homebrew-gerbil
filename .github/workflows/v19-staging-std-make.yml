@@ -81,7 +81,7 @@ jobs:
           key: gerbil-central-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
 
       - name: Install native and benchmark dependencies
-        run: brew install coreutils pkg-config openssl@3 sqlite zlib
+        run: brew install coreutils gcc pkg-config openssl@3 sqlite zlib
 
       - name: Download the released v0.19 toolchain on cache miss
         if: steps.gerbil-cache.outputs.cache-hit != 'true'
@@ -125,6 +125,8 @@ jobs:
           short_sha="${short_sha:0:7}"
           echo "$toolchain_version"
           [[ "$toolchain_version" == *"$short_sha"* ]]
+          command -v gcc-16
+          gcc-16 --version
           gxi -e '(begin (import :std/make) (displayln "std/make import ready"))'
 
       - name: Measure cold and warm native std/make
