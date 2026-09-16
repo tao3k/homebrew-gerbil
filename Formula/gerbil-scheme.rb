@@ -57,8 +57,6 @@ class GerbilScheme < Formula
     end
 
     system ENV.cc.to_s, "--version"
-    # Bootstrap a current SMP-aware host compiler before enabling the
-    # multiple-threaded target VM; the v4.9.8 release compiler cannot do both.
     system "./configure",
            "--prefix=#{prefix}",
            "--enable-march=native",
@@ -71,41 +69,10 @@ class GerbilScheme < Formula
            "--enable-dynamic-clib",
            "--enable-trust-c-tco",
            "--enable-default-runtime-options=p1,tE8,f8,-8"
-    %w[prepare gambit].each do |target|
+    %w[prepare gambit boot-gxi stage0 stage1 stdlib].each do |target|
       target_cores = (target == "gambit") ? 1 : build_cores
       ohai "Building Gerbil phase #{target} with #{target_cores} core(s)"
       with_env("GERBIL_BUILD_FLAGS" => "-j#{target_cores}") do
-        system "./build.sh", target
-      end
-    end
-    host_gsc = buildpath/"gerbil-v19-host-gsc"
-    cp "build/bin/gsc", host_gsc
-    cd "src/gambit" do
-      system "./configure",
-             "--prefix=#{buildpath}/build",
-             "--enable-march=native",
-             "--disable-shared",
-             "--enable-targets=",
-             "--enable-smp",
-             "--enable-multiple-threaded-vms",
-             "--enable-single-host=0",
-             "--enable-optimized-module-limit=0",
-             "--enable-c-opt=-O1",
-             "--enable-c-opt-rts=yes",
-             "--enable-inline-jumps",
-             "--enable-dynamic-clib",
-             "--enable-trust-c-tco",
-             "--enable-default-runtime-options=p1,tE8,f8,-8"
-      system "make", "bootclean"
-      system "make", "-j1", "core"
-      system "make", "-j1", "install"
-    end
-    # Keep gsc as the stable host tool; gsi/gxi and generated programs use the
-    # multiple-threaded target runtime installed into build/.
-    cp host_gsc, "build/bin/gsc"
-    %w[boot-gxi stage0 stage1 stdlib].each do |target|
-      ohai "Building Gerbil phase #{target} with #{build_cores} core(s)"
-      with_env("GERBIL_BUILD_FLAGS" => "-j#{build_cores}") do
         system "./build.sh", target
       end
     end
