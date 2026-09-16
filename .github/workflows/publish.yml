@@ -34,7 +34,7 @@ jobs:
           workflow_name="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .name)"
           verification_head_sha="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}" --jq .head_sha)"
           artifact_count="$(gh api "repos/${REPOSITORY}/actions/runs/${VERIFICATION_RUN_ID}/artifacts" \
-            --jq '[.artifacts[] | select(.name == "verified_bottles_macos-26" and .expired == false)] | length')"
+            --jq '[.artifacts[] | select(.name == "verified_bottles_macos-15" and .expired == false)] | length')"
           if [[ "$workflow_name" != "verify bottle capability" ||
                 "$conclusion" != "success" ||
                 "$verification_head_sha" != "$HEAD_SHA" ||
@@ -61,7 +61,7 @@ jobs:
           --tap="$GITHUB_REPOSITORY"
           --head-sha="$HEAD_SHA"
           --workflows=bottle-performance.yml
-          --artifact-pattern=verified_bottles_macos-26
+          --artifact-pattern=verified_bottles_macos-15
           "$PULL_REQUEST"
 
       - name: Push commits
