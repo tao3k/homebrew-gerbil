@@ -74,7 +74,9 @@ class GerbilScheme < Formula
               'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
               'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \
               '$m -j "${GERBIL_BUILD_CORES:-1}" from-scratch'
-    system "make", "-j#{build_cores}"
+    with_env("GAMBOPT" => "p1") do
+      system "make", "-j#{build_cores}"
+    end
     system "make", "install"
 
     # We get rid of all the non-LFSH stuff
