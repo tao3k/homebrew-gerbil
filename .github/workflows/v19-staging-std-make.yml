@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   benchmark:
-    runs-on: macos-26
+    runs-on: macos-latest
     timeout-minutes: 180
     permissions:
       contents: read
