@@ -5,7 +5,7 @@ on:
     inputs:
       upstream_ref:
         description: Gerbil source branch or revision
-        default: 3964ba4eafae414201e408742a847c404ba755ef
+        default: 94b87422fb6dd055f9667d86527254bd1ebaf4bb
         required: true
         type: string
       warm_budget_seconds:
@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '3964ba4eafae414201e408742a847c404ba755ef' }}
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '94b87422fb6dd055f9667d86527254bd1ebaf4bb' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
       RELEASE_REPOSITORY: tao3k/gerbil-bazel
     steps:
@@ -58,13 +58,13 @@ jobs:
           upstream_subject="$(git -C upstream-gerbil log -1 --format=%s FETCH_HEAD)"
           {
             echo "sha=$upstream_sha"
-            echo "release_tag=gerbil-v0.19-$upstream_sha-darwin-aarch64"
-            echo "release_archive=gerbil-v0.19-$upstream_sha-darwin-aarch64.tar.gz"
+            echo "release_tag=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full"
+            echo "release_archive=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full.tar.gz"
           } >> "$GITHUB_OUTPUT"
           {
             echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19"
-            echo "GERBIL_RELEASE_TAG=gerbil-v0.19-$upstream_sha-darwin-aarch64"
-            echo "GERBIL_RELEASE_ARCHIVE=gerbil-v0.19-$upstream_sha-darwin-aarch64.tar.gz"
+            echo "GERBIL_RELEASE_TAG=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full"
+            echo "GERBIL_RELEASE_ARCHIVE=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full.tar.gz"
           } >> "$GITHUB_ENV"
           {
             echo "### Gerbil v0.19 staging source"
