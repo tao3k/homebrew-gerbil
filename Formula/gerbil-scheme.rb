@@ -61,6 +61,7 @@ class GerbilScheme < Formula
            "--prefix=#{prefix}",
            "--enable-march=native",
            "--enable-smp",
+           "--enable-multiple-threaded-vms",
            "--enable-single-host=0",
            "--enable-optimized-module-limit=0",
            "--enable-c-opt=-O1",

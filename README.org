@@ -73,6 +73,7 @@ These packages are literate and tangled from this README.org.
            "--prefix=#{prefix}",
            "--enable-march=native",
            "--enable-smp",
+           "--enable-multiple-threaded-vms",
            "--enable-single-host=0",
            "--enable-optimized-module-limit=0",
            "--enable-c-opt=-O1",
