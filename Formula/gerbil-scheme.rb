@@ -24,8 +24,9 @@ class GerbilScheme < Formula
   depends_on "sqlite"
   depends_on "zlib"
   on_macos do
-    fails_with :gcc do
-      cause "Gambit FFI bundles built with Homebrew GCC cannot resolve macOS libSystem symbols"
+    depends_on "gcc"
+    fails_with :clang do
+      cause "the performance build requires Homebrew GCC"
     end
   end
   on_linux do
@@ -41,6 +42,8 @@ class GerbilScheme < Formula
     if OS.linux?
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/bin")
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/sbin")
+    else
+      ENV.prepend_path("PATH", "/usr/bin")
     end
 
     ENV["GERBIL_GCC"] = ENV.cc.to_s
@@ -60,7 +63,7 @@ class GerbilScheme < Formula
            "--enable-smp",
            "--enable-single-host=0",
            "--enable-optimized-module-limit=0",
-           "--enable-c-opt=no",
+           "--enable-c-opt=-O1",
            "--enable-c-opt-rts=yes",
            "--enable-inline-jumps",
            "--enable-dynamic-clib",
@@ -72,16 +75,6 @@ class GerbilScheme < Formula
               '$m -j "${GERBIL_BUILD_CORES:-1}" from-scratch'
     system "make", "-j#{build_cores}"
     system "make", "install"
-
-    if OS.mac?
-      gambuild_c = prefix/"current/bin/gambuild-C"
-      inreplace gambuild_c,
-                ENV.cc.to_s,
-                "/usr/bin/xcrun --sdk macosx clang"
-      inreplace gambuild_c,
-                " -bundle ",
-                " -bundle -Wl,-undefined,dynamic_lookup "
-    end
 
     # We get rid of all the non-LFSH stuff
 
@@ -96,6 +89,8 @@ class GerbilScheme < Formula
     end
   end
   test do
-    assert_equal "0123456789", shell_output("#{bin}/gxi -e \"(for-each write '(0 1 2 3 4 5 6 7 8 9))\"")
+    command = "#{bin}/gerbil interactive -e " \
+              "\"(for-each write '(0 1 2 3 4 5 6 7 8 9))\""
+    assert_equal "0123456789", shell_output(command)
   end
 end
