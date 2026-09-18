@@ -9,7 +9,7 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 4
+  revision 5
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
@@ -53,6 +53,12 @@ class GerbilScheme < Formula
     end
 
     system ENV.cc.to_s, "--version"
+    # Gerbil 0.18.2 injects single-host and fixed runtime options before
+    # forwarding user configure arguments. Keep policy in this formula so the
+    # v18 runtime stays non-SMP and chooses its own runtime defaults.
+    inreplace "configure",
+              /readonly default_gambit_config=.*/,
+              'readonly default_gambit_config="--enable-targets=${gerbil_targets}"'
     system "./configure",
            "--prefix=#{prefix}",
            "--enable-march=native",
@@ -99,6 +105,6 @@ class GerbilScheme < Formula
     processor_count = shell_output(
       "#{bin}/gxi -e '(write (##current-vm-processor-count))'",
     ).to_i
-    assert_operator processor_count, :>, 1
+    assert_equal 1, processor_count
   end
 end
