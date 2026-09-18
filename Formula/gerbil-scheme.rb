@@ -9,7 +9,7 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 3
+  revision 4
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
@@ -56,8 +56,6 @@ class GerbilScheme < Formula
     system "./configure",
            "--prefix=#{prefix}",
            "--enable-march=native",
-           "--enable-smp",
-           "--enable-multiple-threaded-vms",
            # Zero removes both limits; keep the release build fully optimized.
            "--enable-single-host=0",
            "--enable-optimized-module-limit=0",
@@ -66,14 +64,19 @@ class GerbilScheme < Formula
            "--enable-gcc-opts",
            "--enable-inline-jumps",
            "--enable-dynamic-clib",
-           "--enable-trust-c-tco",
-           "--enable-default-runtime-options=p100%,tE8,f8,-8"
+           "--enable-trust-c-tco"
+    bootstrap_bin = buildpath/"bootstrap/bin"
     %w[prepare gambit boot-gxi stage0 stage1 stdlib libgerbil].each do |target|
-      target_cores = (target == "gambit") ? 1 : build_cores
-      ohai "Building Gerbil phase #{target} with #{target_cores} core(s)"
-      with_env("GERBIL_BUILD_FLAGS" => "-j#{target_cores}") do
+      ohai "Building Gerbil phase #{target} with #{build_cores} core(s)"
+      with_env("GERBIL_BUILD_FLAGS" => "-j#{build_cores}") do
         system "./build.sh", target
       end
+      next if target != "gambit"
+
+      bootstrap_gsi = bootstrap_bin/"gsi"
+      odie "Gambit phase did not publish executable #{bootstrap_gsi}" unless bootstrap_gsi.executable?
+      ENV.prepend_path "PATH", bootstrap_bin
+      system bootstrap_gsi, "-e", '(display "gsi-bootstrap-ready\\n")'
     end
     system "./install.sh"
 
