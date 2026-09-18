@@ -44,6 +44,7 @@ class GerbilScheme < Formula
     ENV["GERBIL_GCC"] = ENV.cc.to_s
     ENV["CC"] = ENV.cc.to_s
     ENV["CXX"] = ENV.cxx.to_s
+    ENV.append "CFLAGS", "-pipe"
     openssl_include = formula_opt_include("openssl@3")
     ENV.append "CPPFLAGS", "-I#{openssl_include} -include #{openssl_include}/openssl/kdf.h"
     ENV.append "LDFLAGS", "-L#{formula_opt_lib("openssl@3")}"
