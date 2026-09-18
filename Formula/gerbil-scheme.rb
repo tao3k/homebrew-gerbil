@@ -71,7 +71,7 @@ class GerbilScheme < Formula
       with_env("GERBIL_BUILD_FLAGS" => "-j#{build_cores}") do
         system "./build.sh", target
       end
-      next unless target == "gambit"
+      next if target != "gambit"
 
       bootstrap_gsi = bootstrap_bin/"gsi"
       odie "Gambit phase did not publish executable #{bootstrap_gsi}" unless bootstrap_gsi.executable?
