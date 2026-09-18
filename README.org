@@ -75,8 +75,9 @@ These packages are literate and tangled from this README.org.
            "--enable-march=native",
            "--enable-smp",
            "--enable-multiple-threaded-vms",
-           "--enable-single-host=30000",
-           "--enable-optimized-module-limit=20000",
+           # Zero removes both limits; keep the release build fully optimized.
+           "--enable-single-host=0",
+           "--enable-optimized-module-limit=0",
            "--enable-c-opt=-O1",
            "--enable-c-opt-rts=yes",
            "--enable-gcc-opts",
