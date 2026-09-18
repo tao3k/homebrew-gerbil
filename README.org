@@ -96,7 +96,10 @@ These packages are literate and tangled from this README.org.
            "--enable-dynamic-clib",
            "--enable-trust-c-tco"
     bootstrap_bin = buildpath/"bootstrap/bin"
-    %w[prepare gambit boot-gxi stage0 stage1 stdlib libgerbil].each do |target|
+    %w[
+      prepare gambit boot-gxi stage0 stage1 stdlib libgerbil
+      lang r7rs-large srfi tools
+    ].each do |target|
       ohai "Building Gerbil phase #{target} with #{build_cores} core(s)"
       with_env("GERBIL_BUILD_FLAGS" => "-j#{build_cores}") do
         system "./build.sh", target
