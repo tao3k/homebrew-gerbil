@@ -126,7 +126,7 @@ These packages are literate and tangled from this README.org.
   class GerbilScheme < Formula
   <<start-pkg>>
 
-  revision 2
+  revision 3
 
   <<deps-pkg>>
     on_macos do
