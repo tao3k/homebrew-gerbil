@@ -23,7 +23,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: macos-26
+    runs-on: macos-latest
     timeout-minutes: 10
     permissions:
       contents: read

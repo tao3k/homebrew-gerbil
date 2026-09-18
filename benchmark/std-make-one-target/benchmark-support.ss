@@ -47,11 +47,17 @@
   (displayln "[std-make-benchmark] phase=" label " event=process-start")
   (force-output)
   (let* ((started (current-jiffy))
-         (output
+         (result
           (run-process (benchmark-command image timeout arguments)
                        directory: directory
                        stderr-redirection: #t
-                       coprocess: read-all-as-string))
+                       check-status: #f
+                       coprocess:
+                       (lambda (process)
+                         (let (output (read-all-as-string process))
+                           (cons (process-status process) output)))))
+         (status (car result))
+         (output (cdr result))
          (elapsed-ns
           (quotient (* (- (current-jiffy) started) 1000000000)
                     (jiffies-per-second)))
@@ -60,6 +66,11 @@
             (elapsedNs . ,elapsed-ns)
             (compileCount . ,(benchmark-compile-count output)))))
     (display output)
+    (unless (zero? status)
+      (displayln "[std-make-benchmark] phase=" label
+                 " event=process-failed status=" status)
+      (force-output)
+      (error "benchmark subprocess failed" status arguments))
     (displayln "[std-make-benchmark] phase=" label
                " event=process-returned elapsed-ns=" elapsed-ns
                " compile-count=" (cdr (assq 'compileCount sample)))

@@ -9,14 +9,9 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 1
+  revision 2
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
-
-  bottle do
-    root_url "https://github.com/tao3k/homebrew-gerbil/releases/download/gerbil-scheme-0.18.2_1"
-    sha256 arm64_tahoe: "912a79b4096b870f53e3f6fb56b1a79515d6f3996b8e0fb5d20af4d47b0c994a"
-  end
 
   depends_on "coreutils" => :build
   depends_on "pkg-config" => :build
@@ -24,8 +19,9 @@ class GerbilScheme < Formula
   depends_on "sqlite"
   depends_on "zlib"
   on_macos do
-    fails_with :gcc do
-      cause "Gambit FFI bundles built with Homebrew GCC cannot resolve macOS libSystem symbols"
+    depends_on "gcc"
+    fails_with :clang do
+      cause "the performance build requires Homebrew GCC"
     end
   end
   on_linux do
@@ -41,6 +37,8 @@ class GerbilScheme < Formula
     if OS.linux?
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/bin")
       ENV.prepend_path("PATH", "/home/linuxbrew/.linuxbrew/sbin")
+    else
+      ENV.prepend_path("PATH", "/usr/bin")
     end
 
     ENV["GERBIL_GCC"] = ENV.cc.to_s
@@ -51,31 +49,31 @@ class GerbilScheme < Formula
     ENV.append "LDFLAGS", "-L#{formula_opt_lib("openssl@3")}"
     if OS.mac?
       ENV.append "CPPFLAGS", "-isysroot #{MacOS.sdk_path}"
-      ENV.append "LDFLAGS", "-Wl,-ld_classic"
     end
 
     system ENV.cc.to_s, "--version"
     system "./configure",
            "--prefix=#{prefix}",
-           "--enable-march=",
+           "--enable-march=native",
            "--enable-smp",
-           "--disable-single-host"
-    inreplace "src/build.sh",
-              'm="make -j ${GERBIL_BUILD_CORES:-1}" && $m bootstrap && $m from-scratch',
-              'm="${MAKE:-make}" && $m -j "${GERBIL_BUILD_CORES:-1}" bootstrap && ' \
-              '$m -j "${GERBIL_BUILD_CORES:-1}" from-scratch'
-    system "make", "-j#{build_cores}"
-    system "make", "install"
-
-    if OS.mac?
-      gambuild_c = prefix/"current/bin/gambuild-C"
-      inreplace gambuild_c,
-                ENV.cc.to_s,
-                "/usr/bin/xcrun --sdk macosx clang"
-      inreplace gambuild_c,
-                " -bundle ",
-                " -bundle -Wl,-undefined,dynamic_lookup "
+           "--enable-multiple-threaded-vms",
+           "--enable-single-host=0",
+           "--enable-optimized-module-limit=0",
+           "--enable-c-opt=-O1",
+           "--enable-c-opt-rts=yes",
+           "--enable-gcc-opts",
+           "--enable-inline-jumps",
+           "--enable-dynamic-clib",
+           "--enable-trust-c-tco",
+           "--enable-default-runtime-options=p100%,tE8,f8,-8"
+    %w[prepare gambit boot-gxi stage0 stage1 stdlib libgerbil].each do |target|
+      target_cores = (target == "gambit") ? 1 : build_cores
+      ohai "Building Gerbil phase #{target} with #{target_cores} core(s)"
+      with_env("GERBIL_BUILD_FLAGS" => "-j#{target_cores}") do
+        system "./build.sh", target
+      end
     end
+    system "./install.sh"
 
     # We get rid of all the non-LFSH stuff
 
@@ -90,6 +88,12 @@ class GerbilScheme < Formula
     end
   end
   test do
-    assert_equal "0123456789", shell_output("#{bin}/gxi -e \"(for-each write '(0 1 2 3 4 5 6 7 8 9))\"")
+    command = "#{bin}/gerbil interactive -e " \
+              "\"(for-each write '(0 1 2 3 4 5 6 7 8 9))\""
+    assert_equal "0123456789", shell_output(command)
+    processor_count = shell_output(
+      "#{bin}/gxi -e '(write (##current-vm-processor-count))'",
+    ).to_i
+    assert_operator processor_count, :>, 1
   end
 end

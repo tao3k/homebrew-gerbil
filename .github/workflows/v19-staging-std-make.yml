@@ -5,7 +5,7 @@ on:
     inputs:
       upstream_ref:
         description: Gerbil source branch or revision
-        default: 3964ba4eafae414201e408742a847c404ba755ef
+        default: f0badc77836ef6f4b83d8d222a4a159f71b9c592
         required: true
         type: string
       warm_budget_seconds:
@@ -30,12 +30,12 @@ concurrency:
 
 jobs:
   benchmark:
-    runs-on: macos-26
+    runs-on: macos-latest
     timeout-minutes: 180
     permissions:
       contents: read
     env:
-      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '3964ba4eafae414201e408742a847c404ba755ef' }}
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || 'f0badc77836ef6f4b83d8d222a4a159f71b9c592' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
       RELEASE_REPOSITORY: tao3k/gerbil-bazel
     steps:
@@ -58,13 +58,13 @@ jobs:
           upstream_subject="$(git -C upstream-gerbil log -1 --format=%s FETCH_HEAD)"
           {
             echo "sha=$upstream_sha"
-            echo "release_tag=gerbil-v0.19-$upstream_sha-darwin-aarch64"
-            echo "release_archive=gerbil-v0.19-$upstream_sha-darwin-aarch64.tar.gz"
+            echo "release_tag=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full"
+            echo "release_archive=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full.tar.gz"
           } >> "$GITHUB_OUTPUT"
           {
             echo "GERBIL_PREFIX=$RUNNER_TEMP/gerbil-v19"
-            echo "GERBIL_RELEASE_TAG=gerbil-v0.19-$upstream_sha-darwin-aarch64"
-            echo "GERBIL_RELEASE_ARCHIVE=gerbil-v0.19-$upstream_sha-darwin-aarch64.tar.gz"
+            echo "GERBIL_RELEASE_TAG=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full"
+            echo "GERBIL_RELEASE_ARCHIVE=gerbil-v0.19-$upstream_sha-darwin-aarch64-gcc16-native-full.tar.gz"
           } >> "$GITHUB_ENV"
           {
             echo "### Gerbil v0.19 staging source"
@@ -81,7 +81,7 @@ jobs:
           key: gerbil-central-v19-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream.outputs.sha }}
 
       - name: Install native and benchmark dependencies
-        run: brew install coreutils pkg-config openssl@3 sqlite zlib
+        run: brew install coreutils gcc pkg-config openssl@3 sqlite zlib
 
       - name: Download the released v0.19 toolchain on cache miss
         if: steps.gerbil-cache.outputs.cache-hit != 'true'
@@ -125,6 +125,8 @@ jobs:
           short_sha="${short_sha:0:7}"
           echo "$toolchain_version"
           [[ "$toolchain_version" == *"$short_sha"* ]]
+          command -v gcc-16
+          gcc-16 --version
           gxi -e '(begin (import :std/make) (displayln "std/make import ready"))'
 
       - name: Measure cold and warm native std/make
