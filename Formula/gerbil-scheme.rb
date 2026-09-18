@@ -9,7 +9,7 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 5
+  revision 6
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
@@ -59,6 +59,13 @@ class GerbilScheme < Formula
     inreplace "configure",
               /readonly default_gambit_config=.*/,
               'readonly default_gambit_config="--enable-targets=${gerbil_targets}"'
+    # Gerbil 0.18.2 forces debug source tracking for the entire stdlib.  GCC's
+    # generated Scheme #line entries are rejected by modern macOS dsymutil
+    # (for example, the synthetic source name "so_prefix").  A release build
+    # does not need those debug maps, so keep the stdlib optimized and portable.
+    inreplace "src/std/build.ss",
+              "srcdir: srcdir libdir: libdir debug: #t",
+              "srcdir: srcdir libdir: libdir debug: #f"
     system "./configure",
            "--prefix=#{prefix}",
            "--enable-march=native",
