@@ -5,7 +5,7 @@ on:
     inputs:
       upstream_ref:
         description: Gerbil source branch or revision
-        default: 94b87422fb6dd055f9667d86527254bd1ebaf4bb
+        default: f0badc77836ef6f4b83d8d222a4a159f71b9c592
         required: true
         type: string
       warm_budget_seconds:
@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '94b87422fb6dd055f9667d86527254bd1ebaf4bb' }}
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || 'f0badc77836ef6f4b83d8d222a4a159f71b9c592' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
       RELEASE_REPOSITORY: tao3k/gerbil-bazel
     steps:
