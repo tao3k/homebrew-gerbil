@@ -20,6 +20,22 @@ class GerbilSchemeAT019 < Formula
 
   def install
     prefix.install Dir["*"]
+
+    release_bin = prefix/"current/bin"
+    rm prefix/"bin"
+    bin.mkpath
+    release_bin.children.select(&:executable?).each do |executable|
+      command = executable.basename
+      (bin/command).write <<~SH
+        #!/bin/bash
+        export GERBIL_PREFIX="#{prefix}"
+        export GERBIL_HOME="#{prefix}/current"
+        gerbil_runtime_options="~~=$GERBIL_HOME,~~bin=$GERBIL_HOME/bin,~~lib=$GERBIL_HOME/lib"
+        export GAMBOPT="${GAMBOPT:+$GAMBOPT,}$gerbil_runtime_options"
+        exec "$GERBIL_HOME/bin/#{command}" "$@"
+      SH
+      chmod 0755, bin/command
+    end
   end
 
   test do
