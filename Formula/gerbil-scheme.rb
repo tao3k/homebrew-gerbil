@@ -9,7 +9,7 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 6
+  revision 7
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
@@ -19,9 +19,8 @@ class GerbilScheme < Formula
   depends_on "sqlite"
   depends_on "zlib"
   on_macos do
-    depends_on "gcc"
-    fails_with :clang do
-      cause "the performance build requires Homebrew GCC"
+    fails_with :gcc do
+      cause "Gerbil v0.18.2 uses the Apple Clang toolchain on macOS"
     end
   end
   on_linux do
@@ -59,25 +58,20 @@ class GerbilScheme < Formula
     inreplace "configure",
               /readonly default_gambit_config=.*/,
               'readonly default_gambit_config="--enable-targets=${gerbil_targets}"'
-    # Gerbil 0.18.2 forces debug source tracking for the entire stdlib.  GCC's
-    # generated Scheme #line entries are rejected by modern macOS dsymutil
-    # (for example, the synthetic source name "so_prefix").  A release build
-    # does not need those debug maps, so keep the stdlib optimized and portable.
-    inreplace "src/std/build.ss",
-              "srcdir: srcdir libdir: libdir debug: #t",
-              "srcdir: srcdir libdir: libdir debug: #f"
-    system "./configure",
-           "--prefix=#{prefix}",
-           "--enable-march=native",
-           # Zero removes both limits; keep the release build fully optimized.
-           "--enable-single-host=0",
-           "--enable-optimized-module-limit=0",
-           "--enable-c-opt=-O1",
-           "--enable-c-opt-rts=yes",
-           "--enable-gcc-opts",
-           "--enable-inline-jumps",
-           "--enable-dynamic-clib",
-           "--enable-trust-c-tco"
+    configure_args = [
+      "--prefix=#{prefix}",
+      "--enable-march=native",
+      # Zero removes both limits; keep the release build fully optimized.
+      "--enable-single-host=0",
+      "--enable-optimized-module-limit=0",
+      "--enable-c-opt=#{OS.mac? ? "no" : "-O1"}",
+      "--enable-c-opt-rts=yes",
+      "--enable-inline-jumps",
+      "--enable-dynamic-clib",
+      "--enable-trust-c-tco",
+    ]
+    configure_args << "--enable-gcc-opts" if OS.linux?
+    system "./configure", *configure_args
     bootstrap_bin = buildpath/"bootstrap/bin"
     %w[
       prepare gambit boot-gxi stage0 stage1 stdlib libgerbil
