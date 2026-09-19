@@ -21,6 +21,10 @@ class GerbilSchemeAT019 < Formula
   def install
     prefix.install Dir["*"]
 
+    emacs_site_lisp = prefix/"current/share/emacs/site-lisp"
+    emacs_files = emacs_site_lisp.children
+    (emacs_site_lisp/name).install emacs_files
+
     release_bin = prefix/"current/bin"
     rm prefix/"bin"
     bin.mkpath
