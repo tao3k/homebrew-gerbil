@@ -9,7 +9,7 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 8
+  revision 9
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
@@ -41,9 +41,17 @@ class GerbilScheme < Formula
       ENV.prepend_path("PATH", "/usr/bin")
     end
 
-    ENV["GERBIL_GCC"] = ENV.cc.to_s
-    ENV["CC"] = ENV.cc.to_s
-    ENV["CXX"] = ENV.cxx.to_s
+    gcc_formula = Formula[OS.mac? ? "gcc" : "gcc@13"]
+    gcc_major = gcc_formula.version.major
+    c_compiler = gcc_formula.opt_bin/"gcc-#{gcc_major}"
+    cxx_compiler = gcc_formula.opt_bin/"g++-#{gcc_major}"
+    odie "Missing GCC compiler #{c_compiler}" unless c_compiler.executable?
+    odie "Missing GCC compiler #{cxx_compiler}" unless cxx_compiler.executable?
+    # Use the dependency's compiler directly. Homebrew's compiler shim rewrites
+    # Gambit's per-file -O1/-O3 policy and injects an incompatible -oso_prefix.
+    ENV["GERBIL_GCC"] = c_compiler.to_s
+    ENV["CC"] = c_compiler.to_s
+    ENV["CXX"] = cxx_compiler.to_s
     ENV.append "CFLAGS", "-pipe"
     openssl_include = formula_opt_include("openssl@3")
     ENV.append "CPPFLAGS", "-I#{openssl_include} -include #{openssl_include}/openssl/kdf.h"
@@ -53,7 +61,7 @@ class GerbilScheme < Formula
       ENV.append "LDFLAGS", "-Wl,-ld_classic"
     end
 
-    system ENV.cc.to_s, "--version"
+    system c_compiler, "--version"
     # Gerbil 0.18.2 injects single-host and fixed runtime options before
     # forwarding user configure arguments. Keep policy in this formula so the
     # v18 runtime stays non-SMP and chooses its own runtime defaults.
