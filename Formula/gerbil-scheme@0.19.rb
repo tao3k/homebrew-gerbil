@@ -4,9 +4,10 @@
 class GerbilSchemeAT019 < Formula
   desc "Opinionated dialect of Scheme designed for Systems Programming"
   homepage "https://cons.io"
-  url "https://github.com/tao3k/gerbil-bazel/releases/download/gerbil-v0.19-f0badc77836ef6f4b83d8d222a4a159f71b9c592-darwin-aarch64-gcc16-native-full/gerbil-v0.19-f0badc77836ef6f4b83d8d222a4a159f71b9c592-darwin-aarch64-gcc16-native-full.tar.gz"
+  url "https://github.com/tao3k/gerbil-bazel/releases/download/gerbil-v0.19-f0badc77836ef6f4b83d8d222a4a159f71b9c592-darwin-aarch64-gcc16-arm64-aot-tools-single-host-unlimited/gerbil-v0.19-f0badc77836ef6f4b83d8d222a4a159f71b9c592-darwin-aarch64-gcc16-arm64-aot-tools-single-host-unlimited.tar.gz"
   version "0.19.f0badc7"
-  sha256 "2f23c422017b0f523992d0214fbc6a2157431613c8ed060300bca952de058f26"
+  revision 1
+  sha256 "2721d9bbdc719986fcba069a0a9b1ae06e082fdfc617fded27e4f7ec0cac97ba"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
   keg_only :versioned_formula
