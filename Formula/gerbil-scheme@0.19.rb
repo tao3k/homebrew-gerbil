@@ -28,7 +28,7 @@ class GerbilSchemeAT019 < Formula
     release_bin = prefix/"current/bin"
     rm prefix/"bin"
     bin.mkpath
-    %w[gerbil gxc gxensemble gxi gxhttpd gxpkg gxprof gxtags gxtest].each do |command|
+    %w[gerbil gxc gxi gxhttpd gxtest].each do |command|
       executable = release_bin/command
       odie "Missing released executable #{executable}" unless executable.executable?
       (bin/command).write <<~SH
@@ -45,6 +45,12 @@ class GerbilSchemeAT019 < Formula
 
   test do
     assert_match "0c276b3", shell_output("#{bin}/gxi -v 2>&1")
+    assert_equal "#t\n", shell_output(
+      "#{bin}/gxi -e '(begin (import :gerbil/runtime/system) (write (gerbil-runtime-smp?)) (newline))'",
+    )
+    assert_equal "std/make-ready\n", shell_output(
+      "#{bin}/gxi -e '(begin (import :std/make) (displayln \"std/make-ready\"))'",
+    )
     assert_equal "v19-release-ready\n",
                  shell_output("#{bin}/gxi -e '(displayln \"v19-release-ready\")'")
   end
