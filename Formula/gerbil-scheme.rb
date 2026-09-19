@@ -9,7 +9,7 @@ class GerbilScheme < Formula
       using: :git, tag: "v0.18.2", revision: "07c8481588a8b07dbf05832687817cd398902ac0"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
-  revision 7
+  revision 8
 
   head "https://github.com/mighty-gerbils/gerbil.git", using: :git, branch: "master"
 
@@ -19,8 +19,9 @@ class GerbilScheme < Formula
   depends_on "sqlite"
   depends_on "zlib"
   on_macos do
-    fails_with :gcc do
-      cause "Gerbil v0.18.2 uses the Apple Clang toolchain on macOS"
+    depends_on "gcc"
+    fails_with :clang do
+      cause "the performance build requires Homebrew GCC"
     end
   end
   on_linux do
@@ -49,6 +50,7 @@ class GerbilScheme < Formula
     ENV.append "LDFLAGS", "-L#{formula_opt_lib("openssl@3")}"
     if OS.mac?
       ENV.append "CPPFLAGS", "-isysroot #{MacOS.sdk_path}"
+      ENV.append "LDFLAGS", "-Wl,-ld_classic"
     end
 
     system ENV.cc.to_s, "--version"
@@ -64,13 +66,13 @@ class GerbilScheme < Formula
       # Zero removes both limits; keep the release build fully optimized.
       "--enable-single-host=0",
       "--enable-optimized-module-limit=0",
-      "--enable-c-opt=#{OS.mac? ? "no" : "-O1"}",
+      "--enable-c-opt=-O1",
       "--enable-c-opt-rts=yes",
       "--enable-inline-jumps",
       "--enable-dynamic-clib",
       "--enable-trust-c-tco",
     ]
-    configure_args << "--enable-gcc-opts" if OS.linux?
+    configure_args << "--enable-gcc-opts"
     system "./configure", *configure_args
     bootstrap_bin = buildpath/"bootstrap/bin"
     %w[
