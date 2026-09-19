@@ -28,8 +28,9 @@ class GerbilSchemeAT019 < Formula
     release_bin = prefix/"current/bin"
     rm prefix/"bin"
     bin.mkpath
-    release_bin.children.select(&:executable?).each do |executable|
-      command = executable.basename
+    %w[gerbil gxc gxensemble gxi gxhttpd gxpkg gxprof gxtags gxtest].each do |command|
+      executable = release_bin/command
+      odie "Missing released executable #{executable}" unless executable.executable?
       (bin/command).write <<~SH
         #!/bin/bash
         export GERBIL_PREFIX="#{prefix}"
