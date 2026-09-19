@@ -4,9 +4,9 @@
 class GerbilSchemeAT019 < Formula
   desc "Opinionated dialect of Scheme designed for Systems Programming"
   homepage "https://cons.io"
-  url "https://github.com/tao3k/gerbil-bazel/releases/download/gerbil-v0.19-0c276b3b12c5f277ab5697c711c370cf377c6a21-darwin-aarch64-gcc16-native-full/gerbil-v0.19-0c276b3b12c5f277ab5697c711c370cf377c6a21-darwin-aarch64-gcc16-native-full.tar.gz"
-  version "0.19.0c276b3"
-  sha256 "5649f7d111c0c2e11c5e34629be8f156148877788e9a99407f74d33f207b85c6"
+  url "https://github.com/tao3k/gerbil-bazel/releases/download/gerbil-v0.19-f0badc77836ef6f4b83d8d222a4a159f71b9c592-darwin-aarch64-gcc16-native-full/gerbil-v0.19-f0badc77836ef6f4b83d8d222a4a159f71b9c592-darwin-aarch64-gcc16-native-full.tar.gz"
+  version "0.19.f0badc7"
+  sha256 "2f23c422017b0f523992d0214fbc6a2157431613c8ed060300bca952de058f26"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
   keg_only :versioned_formula
@@ -28,7 +28,7 @@ class GerbilSchemeAT019 < Formula
     release_bin = prefix/"current/bin"
     rm prefix/"bin"
     bin.mkpath
-    %w[gerbil gxc gxi gxhttpd gxtest].each do |command|
+    %w[gerbil gxc gxi gxhttpd gxpkg gxtags gxtest].each do |command|
       executable = release_bin/command
       odie "Missing released executable #{executable}" unless executable.executable?
       (bin/command).write <<~SH
@@ -44,7 +44,7 @@ class GerbilSchemeAT019 < Formula
   end
 
   test do
-    assert_match "0c276b3", shell_output("#{bin}/gxi -v 2>&1")
+    assert_match "f0badc7", shell_output("#{bin}/gxi -v 2>&1")
     assert_equal "#t\n", shell_output(
       "#{bin}/gxi -e '(begin (import :gerbil/runtime/system) (write (gerbil-runtime-smp?)) (newline))'",
     )
@@ -53,5 +53,7 @@ class GerbilSchemeAT019 < Formula
     )
     assert_equal "v19-release-ready\n",
                  shell_output("#{bin}/gxi -e '(displayln \"v19-release-ready\")'")
+    system bin/"gxpkg", "version"
+    system bin/"gxtags", "--help"
   end
 end
