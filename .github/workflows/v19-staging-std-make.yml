@@ -5,7 +5,7 @@ on:
     inputs:
       upstream_ref:
         description: Gerbil source branch or revision
-        default: 0c276b3b12c5f277ab5697c711c370cf377c6a21
+        default: f0badc77836ef6f4b83d8d222a4a159f71b9c592
         required: true
         type: string
       warm_budget_seconds:
@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || '0c276b3b12c5f277ab5697c711c370cf377c6a21' }}
+      GERBIL_SOURCE_REF: ${{ inputs.upstream_ref || 'f0badc77836ef6f4b83d8d222a4a159f71b9c592' }}
       WARM_BUDGET_SECONDS: ${{ inputs.warm_budget_seconds || '19' }}
       RELEASE_REPOSITORY: tao3k/gerbil-bazel
     steps:
@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           git init upstream-gerbil
-          git -C upstream-gerbil remote add origin https://github.com/mighty-gerbils/gerbil.git
+          git -C upstream-gerbil remote add origin https://git.cons.io/mighty-gerbils/gerbil.git
           git -C upstream-gerbil fetch --depth=1 origin "$GERBIL_SOURCE_REF"
 
       - name: Resolve immutable upstream revision
