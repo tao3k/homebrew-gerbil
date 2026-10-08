@@ -4,9 +4,9 @@
 class GerbilSchemeAT019 < Formula
   desc "Opinionated dialect of Scheme designed for Systems Programming"
   homepage "https://cons.io"
-  url "https://github.com/tao3k/gerbil-bazel/releases/download/gerbil-v0.19-2591dcd9b7c6d2c4e9dd8611a17c5b1a5d82bbdb-darwin-aarch64-gcc16-arm64-aot-tools-single-host-unlimited-patchf5cedd8168cb/gerbil-v0.19-2591dcd9b7c6d2c4e9dd8611a17c5b1a5d82bbdb-darwin-aarch64-gcc16-arm64-aot-tools-single-host-unlimited-patchf5cedd8168cb.tar.gz"
-  version "0.19.2591dcd.patchf5cedd8168cb"
-  sha256 "8d9c88434aed6301eaebb719bf52472f05c2368eafc630e8a9f1d67cc9895a21"
+  url "https://github.com/tao3k/gerbil-bazel/releases/download/gerbil-v0.19-1cfb032c7a1612637da6205f5f8a15683eba3ba0-darwin-aarch64-gcc16-arm64-aot-tools-single-host-unlimited-multiple-vms-patch1802425ec0b1/gerbil-v0.19-1cfb032c7a1612637da6205f5f8a15683eba3ba0-darwin-aarch64-gcc16-arm64-aot-tools-single-host-unlimited-multiple-vms-patch1802425ec0b1.tar.gz"
+  version "0.19.1cfb032.patch1802425ec0b1"
+  sha256 "e2385a515ba820551c843c29fdc59f4ea46f5e738226e791e5c8ff3bd0788a0e"
   license any_of: ["LGPL-2.1-or-later", "Apache-2.0"]
 
   keg_only :versioned_formula
@@ -44,7 +44,7 @@ class GerbilSchemeAT019 < Formula
   end
 
   test do
-    assert_match "2591dcd", shell_output("#{bin}/gxi -v 2>&1")
+    assert_match "1cfb032", shell_output("#{bin}/gxi -v 2>&1")
     assert_equal "#t\n", shell_output(
       "#{bin}/gxi -e '(begin (import :gerbil/runtime/system) (write (gerbil-runtime-smp?)) (newline))'",
     )
